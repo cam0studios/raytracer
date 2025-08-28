@@ -1,0 +1,39 @@
+[
+    {
+        "id": "red",
+        "type": "diffuse",
+        "color": [1, 0.2, 0.2],
+        "smoothness": 0
+    },
+    {
+        "id": "blue",
+        "type": "diffuse",
+        "color": [0.2, 0.5, 1],
+        "smoothness": 0.5
+    },
+    {
+        "id": "green",
+        "type": "diffuse",
+        "color": [0.2, 0.8, 0.2],
+        "smoothness": 0
+    },
+    {
+        "id": "white",
+        "type": "diffuse",
+        "color": [0.9, 0.9, 0.9],
+        "smoothness": 0
+    },
+    {
+        "id": "light",
+        "type": "basic",
+        "emission": [1.0, 1.0, 1.0, 7]
+    },
+    {
+        "id": "monkey",
+        "type": "dielectric",
+        "color": [1, 1, 1],
+        "tint": [0.95, 0.8, 0.95],
+        "smoothness": 1,
+        "ior": 1.5
+    }
+]

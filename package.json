@@ -1,0 +1,21 @@
+{
+  "name": "template",
+  "module": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run scripts/dev.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@webgpu/types": "^0.1.64",
+    "chalk": "^5.4.1",
+    "esbuild": "^0.24.2",
+    "esbuild-plugin-copy": "^2.1.1",
+    "stl-reader": "^3.0.1"
+  }
+}
