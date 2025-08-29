@@ -44,6 +44,7 @@ interface Dielectric extends BasicMaterial {
 	type: "dielectric";
 	color: vec3;
 	tint: vec3;
+	reflect: vec3;
 	smoothness: number;
 	ior: number;
 }
@@ -54,7 +55,7 @@ function materialToRaw(i: number) {
 	let light = [...(material.emission || [0, 0, 0, 0]), 0, 0, 0, 0];
 	if (material.type == "basic") {
 		return [
-			...new Array(16).fill(0),
+			...new Array(24).fill(0),
 			...light
 		]
 	} else if (material.type == "diffuse") {
@@ -64,6 +65,8 @@ function materialToRaw(i: number) {
 			diffuseMaterial.smoothness, 0, 0, 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 0,
 			...light
 		];
 	} else if (material.type == "dielectric") {
@@ -71,12 +74,14 @@ function materialToRaw(i: number) {
 		return [
 			...dielectricMaterial.color, 1,
 			...dielectricMaterial.tint, dielectricMaterial.ior,
+			...dielectricMaterial.reflect, 0,
+			0, 0, 0, 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
 			...light
 		];
 	} else {
-		return [...new Array(24).fill(0)];
+		return [...new Array(32).fill(0)];
 	}
 }
 
@@ -110,7 +115,7 @@ async function init() {
 
 	device.pushErrorScope("validation");
 
-	const SIZE = 256;
+	const SIZE = 512;
 	const RAYS_PER_PIXEL = 5;
 	const OUTPUT_LEN = SIZE * SIZE * 4;
 	const OUTPUT_SIZE = OUTPUT_LEN * 4;
@@ -186,8 +191,8 @@ async function init() {
 				...obj.pos, 1,
 				// ...obj.color.flat(),
 				// ...obj.light.flat(),
-				...materialToRaw(obj.materialI),
-				obj.triangles?.length || 0, Math.floor(triangles.length / 24), 0, 0,
+				// ...materialToRaw(obj.materialI),
+				obj.triangles?.length || 0, Math.floor(triangles.length / 24), 0, obj.materialI,
 			]);
 			for (let i = 0; i < obj.triangles.length; i++) {
 				obj.triangles[i].index = Math.floor(triangles.length / 24);
@@ -203,8 +208,8 @@ async function init() {
 				...obj.pos, 2,
 				// ...obj.color.flat(),
 				// ...obj.light.flat(),
-				...materialToRaw(obj.materialI),
-				obj.radius || 0, 0, 0, 0
+				// ...materialToRaw(obj.materialI),
+				obj.radius || 0, 0, 0, obj.materialI,
 			]);
 		}
 	}
@@ -212,7 +217,6 @@ async function init() {
 		scene[i].index = i;
 		scene[i].materialI = materials.findIndex(m => m.id === scene[i].material);
 		add(scene[i]);
-		console.log(scene[i]);
 	}
 
 	let boxes: AABB[] = [];
@@ -462,10 +466,6 @@ async function init() {
 		root.addObject(box);
 	});
 	root.split();
-	console.log(root);
-	console.log(boxes);
-	console.log(objs);
-	console.log(triangles);
 	boxes.forEach(box => {
 		boxNums.push(...[
 			...box.min, box.index,
@@ -475,6 +475,17 @@ async function init() {
 			...new Array(4).fill(0)
 		]);
 	});
+
+	materials.forEach((m, i) => {
+		materialNums.push(...materialToRaw(i));
+	});
+
+	// console.log(root);
+	// console.log(boxes);
+	// console.log(objs);
+	// console.log(triangles);
+	// console.log(materials);
+
 	// let stack: (AABB | undefined)[] = [...new Array(32).fill(undefined)];
 	// stack[0] = boxes[0];
 	// let stackEnd = 1;
@@ -519,12 +530,17 @@ async function init() {
 	const TRIANGLES_SIZE = TRIANGLES_LEN * 4;
 	let rawTriangles = new Float32Array(triangles);
 
+	const MATERIALS_LEN = materialNums.length;
+	const MATERIALS_SIZE = MATERIALS_LEN * 4;
+	let rawMaterials = new Float32Array(materialNums);
+
 	let shader: string = rawShader;
 
-	shader = shader.replaceAll("$OBJECT_CT", (OBJS_LEN / 32).toString());
+	shader = shader.replaceAll("$OBJECT_CT", (OBJS_LEN / 8).toString());
 	shader = shader.replaceAll("$OUTPUT_LEN", OUTPUT_LEN.toString());
 	shader = shader.replaceAll("$BOX_CT", (BOXES_LEN / 16).toString());
 	shader = shader.replaceAll("$TRIANGLE_CT", (TRIANGLES_LEN / 24).toString());
+	shader = shader.replaceAll("$MATERIAL_CT", (MATERIALS_LEN / 32).toString());
 	shader = shader.replaceAll("$SIZE", SIZE.toString());
 	shader = shader.replaceAll("$BOUNCES", BOUNCES.toString());
 	shader = shader.replaceAll("$RAYS_PER_PIXEL", RAYS_PER_PIXEL.toString());
@@ -551,6 +567,12 @@ async function init() {
 		usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 	});
 	device.queue.writeBuffer(trianglesBuffer, 0, rawTriangles, 0, TRIANGLES_LEN);
+
+	const materialsBuffer = device.createBuffer({
+		size: MATERIALS_SIZE,
+		usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+	});
+	device.queue.writeBuffer(materialsBuffer, 0, rawMaterials, 0, MATERIALS_LEN);
 
 	const output = device.createBuffer({
 		size: OUTPUT_SIZE,
@@ -603,6 +625,13 @@ async function init() {
 				buffer: {
 					type: "storage",
 				},
+			},
+			{
+				binding: 5,
+				visibility: GPUShaderStage.COMPUTE,
+				buffer: {
+					type: "storage",
+				},
 			}
 		],
 	});
@@ -638,6 +667,12 @@ async function init() {
 				binding: 4,
 				resource: {
 					buffer: trianglesBuffer,
+				}
+			},
+			{
+				binding: 5,
+				resource: {
+					buffer: materialsBuffer,
 				}
 			}
 		],
@@ -696,7 +731,6 @@ async function init() {
 		await stagingBuffer.mapAsync(GPUMapMode.READ, 0, OUTPUT_SIZE);
 		const arrayBuffer = stagingBuffer.getMappedRange(0, OUTPUT_SIZE);
 		data = new Float32Array(arrayBuffer.slice());
-		if (frame == 0) console.log(data.slice(0, 100));
 		stagingBuffer.unmap();
 
 		device.popErrorScope().then((error) => {

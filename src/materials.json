@@ -29,10 +29,11 @@
         "emission": [1.0, 1.0, 1.0, 7]
     },
     {
-        "id": "monkey",
+        "id": "glassy",
         "type": "dielectric",
-        "color": [1, 1, 1],
+        "color": [1.0, 1.0, 1.0],
         "tint": [0.95, 0.8, 0.95],
+        "reflect": [1.0, 1.0, 1.0],
         "smoothness": 1,
         "ior": 1.5
     }

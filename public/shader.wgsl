@@ -8,6 +8,8 @@ var<storage, read_write> vars: array<vec4f>;
 var<storage, read_write> boxes: array<AABB>;
 @group(0) @binding(4)
 var<storage, read_write> triangles: array<BasicTriangle>;
+@group(0) @binding(5)
+var<storage, read_write> materials: array<Material>;
 
 struct Ray {
 	position: vec3f,
@@ -27,21 +29,11 @@ struct HitInfo {
 struct Object {
 	position: vec3f,
 	typ: f32,
-	color: mat4x4f,
-	light: mat2x4f,
-	data: vec4f,
+	data: vec3f,
+	material: f32,
 	/*
 	posX posY posZ type
-
-	colR colG colB colT
-	col0 col1 col2 col3
-	col4 col5 col6 col7
-	col8 col9 cl10 cl11
-
-	litR litG litB litI
-	lit0 lit1 lit2 lit3
-	
-	dat0 dat1 dat2 dat3
+	dat0 dat1 dat2 matI
 	*/
 }
 
@@ -60,6 +52,11 @@ struct AABB {
 struct BasicTriangle {
 	points: mat3x4f,
 	normals: mat3x4f,
+}
+
+struct Material {
+	color: array<vec4f, 6>,
+	light: mat2x4f,
 }
 
 @compute @workgroup_size(64)
@@ -124,32 +121,34 @@ fn main(
 		}
 
 		var obj = objects[hit.index];
+		var material = materials[i32(obj.material)];
 
 		ray.position += ray.direction * hit.distance;
 
-		if (obj.color[0].w == 0) {
+		if (material.color[0].w == 0) {
 			if (!hit.backface) {
-				light += obj.light[0].xyz * obj.light[0].w * color;
-				if (obj.color[0].x == 0.0 && obj.color[0].y == 0.0 && obj.color[0].z == 0.0 && obj.color[1][1] == 0.0) {
+				light += material.light[0].xyz * material.light[0].w * color;
+				if (material.color[0].x == 0.0 && material.color[0].y == 0.0 && material.color[0].z == 0.0 && material.color[1][1] == 0.0) {
 					break;
 				}
 				var reflDir: vec3f = reflect(ray.direction, hit.normal);
 				var randDir: vec3f = normalize(hit.normal + randomDir(&rngState));
-				if (rng(&rngState) < obj.color[1][1]) {
-					ray.direction = normalize(reflDir * obj.color[2][3] + randDir * (1.0 - obj.color[2][3]));
-					color *= obj.color[2].xyz;
+				if (rng(&rngState) < material.color[1][1]) {
+					ray.direction = normalize(reflDir * material.color[2][3] + randDir * (1.0 - material.color[2][3]));
+					color *= material.color[2].xyz;
 				} else {
-					ray.direction = normalize(reflDir * obj.color[1][0] + randDir * (1.0 - obj.color[1][0]));
-					color *= obj.color[0].xyz;
+					ray.direction = normalize(reflDir * material.color[1][0] + randDir * (1.0 - material.color[1][0]));
+					color *= material.color[0].xyz;
 				}
 
 			}
-		} else if (obj.color[0].w == 1) {
-			light += obj.light[0].xyz * obj.light[0].w * color;
+		} else if (material.color[0].w == 1) {
+			light += material.light[0].xyz * material.light[0].w * color;
+			color *= material.color[0].xyz;
 			if (hit.backface) {
-				color *= vec3f(pow(obj.color[1].x, hit.distance), pow(obj.color[1].y, hit.distance), pow(obj.color[1].z, hit.distance));
+				color *= vec3f(pow(material.color[1].x, hit.distance), pow(material.color[1].y, hit.distance), pow(material.color[1].z, hit.distance));
 			}
-			var iorRatio: f32 = obj.color[1][3] / ior;
+			var iorRatio: f32 = material.color[1].w / ior;
 			if (!hit.backface) {
 				iorRatio = 1.0 / iorRatio;
 			}
@@ -158,11 +157,11 @@ fn main(
 			if (iorRatio * sinT <= 1.0 && rng(&rngState) > reflectance(cosT, iorRatio)) {
 				var refrDir: vec3f = refract(ray.direction, hit.normal, iorRatio);
 				ray.direction = normalize(refrDir);
-				ior = obj.color[1][3];
+				ior = material.color[1].w;
 			} else {
 				var reflDir: vec3f = reflect(ray.direction, hit.normal);
 				ray.direction = normalize(reflDir);
-				color *= obj.color[0].xyz;
+				color *= material.color[2].xyz;
 			}
 		}
 		ray.position += ray.direction * 0.0001;
