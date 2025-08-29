@@ -185,6 +185,10 @@ fn main(
 	// 	}
 	// }
 
+	if (light.x != light.x || light.y != light.y || light.z != light.z) {
+		light = vec3f(0.0, 0.0, 0.0);
+	}
+
 	output[id] *= f32(frame);
 	output[id] += vec4f(light, 1.0);
 	output[id] /= f32(frame) + 1;
