@@ -3,7 +3,12 @@
         "id": "red",
         "type": "diffuse",
         "color": [1, 0.2, 0.2],
-        "smoothness": 0
+        "smoothness": 0,
+		"coating": {
+			"color": [1, 1, 1],
+			"smoothness": 0.98,
+			"strength": 0.05
+		}
     },
     {
         "id": "blue",
@@ -26,13 +31,13 @@
     {
         "id": "light",
         "type": "basic",
-        "emission": [1.0, 1.0, 1.0, 7]
+        "emission": [1.0, 1.0, 1.0, 10]
     },
     {
         "id": "glassy",
         "type": "dielectric",
         "color": [1.0, 1.0, 1.0],
-        "tint": [0.95, 0.8, 0.95],
+        "tint": [0.97, 0.9, 0.95],
         "reflect": [1.0, 1.0, 1.0],
         "smoothness": 1,
         "ior": 1.5

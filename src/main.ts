@@ -2,29 +2,60 @@
 import rawShader from "../public/shader.wgsl";
 import rawScene from "./scene.json";
 import rawMaterials from "./materials.json";
+import rawModels from "./models.json";
 
 type vec3 = [number, number, number];
 type vec4 = [number, number, number, number];
 type mat2x4 = [vec4, vec4];
 type mat3x3 = [vec3, vec3, vec3];
 type mat4x4 = [vec4, vec4, vec4, vec4];
+function matrixMultiply(mat1: mat4x4, mat2: mat4x4): mat4x4 {
+	const result: mat4x4 = [
+		[0, 0, 0, 0],
+		[0, 0, 0, 0],
+		[0, 0, 0, 0],
+		[0, 0, 0, 0],
+	];
+	for (let i = 0; i < 4; i++) {
+		for (let j = 0; j < 4; j++) {
+			result[i][j] =
+				mat1[i][0] * mat2[0][j] +
+				mat1[i][1] * mat2[1][j] +
+				mat1[i][2] * mat2[2][j] +
+				mat1[i][3] * mat2[3][j];
+		}
+	}
+	return result;
+}
+function vectorMatrixMultiply(vec: vec4, mat: mat4x4): vec4 {
+	const result: vec4 = [0, 0, 0, 0];
+	for (let i = 0; i < 4; i++) {
+		result[i] =
+			vec[0] * mat[i][0] +
+			vec[1] * mat[i][1] +
+			vec[2] * mat[i][2] +
+			vec[3] * mat[i][3];
+	}
+	return result;
+}
 
 interface BasicObject {
 	type: string;
-	// color: mat4x4 | mat2x4;
-	// light?: mat2x4;
+	position: vec3;
+	rotation: vec3;
+	scale: vec3;
+	transform: mat4x4;
 	material: string;
 	materialI: number;
 	index: number;
 }
 interface Mesh extends BasicObject {
 	type: "mesh";
-	pos?: vec3;
-	triangles: { points: mat3x3, normals?: mat3x3, index: number }[]
+	model: string;
+	modelI: number;
 }
 interface Sphere extends BasicObject {
 	type: "sphere";
-	pos: vec3;
 	radius: number;
 }
 type SceneObject = Mesh | Sphere;
@@ -39,6 +70,11 @@ interface Diffuse extends BasicMaterial {
 	type: "diffuse";
 	color: vec3;
 	smoothness: number;
+	coating?: {
+		color: vec3;
+		smoothness: number;
+		strength: number;
+	};
 }
 interface Dielectric extends BasicMaterial {
 	type: "dielectric";
@@ -62,8 +98,8 @@ function materialToRaw(i: number) {
 		const diffuseMaterial = material as Diffuse;
 		return [
 			...diffuseMaterial.color, 0,
-			diffuseMaterial.smoothness, 0, 0, 0,
-			0, 0, 0, 0,
+			diffuseMaterial.smoothness, diffuseMaterial.coating?.strength || 0, 0, 0,
+			...diffuseMaterial.coating?.color || [0, 0, 0], diffuseMaterial.coating?.smoothness || 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
@@ -84,6 +120,12 @@ function materialToRaw(i: number) {
 		return [...new Array(32).fill(0)];
 	}
 }
+
+interface Model {
+	id: string;
+	triangles: { points: mat3x3, normals?: mat3x3, index: number }[];
+}
+const models = rawModels as Model[];
 
 let animationFrameId: number | null = null;
 
@@ -115,8 +157,8 @@ async function init() {
 
 	device.pushErrorScope("validation");
 
-	const SIZE = 512;
-	const RAYS_PER_PIXEL = 5;
+	const SIZE = 1024;
+	const RAYS_PER_PIXEL = 10;
 	const OUTPUT_LEN = SIZE * SIZE * 4;
 	const OUTPUT_SIZE = OUTPUT_LEN * 4;
 	const VARS_LEN = 16;
@@ -132,18 +174,18 @@ async function init() {
 	let materialNums: number[] = [];
 
 	var cam = {
-		pos: [0, 0, 25],
-		rot: [0, 0],
+		position: [0, 0, 25],
+		rotation: [0, 0],
 		fov: 35,
 		focusDistance: 1,
 		defocusStrength: 0,
-		dir: [0, 0, 1],
+		direction: [0, 0, 1],
 		updateDir: function() {
-			const radX = -(this.rot[0] * Math.PI) / 180;
-			const radY = -(this.rot[1] * Math.PI) / 180;
-			this.dir[0] = Math.cos(radY) * Math.sin(radX);
-			this.dir[1] = Math.sin(radY);
-			this.dir[2] = Math.cos(radY) * Math.cos(radX);
+			const radX = -(this.rotation[0] * Math.PI) / 180;
+			const radY = -(this.rotation[1] * Math.PI) / 180;
+			this.direction[0] = Math.cos(radY) * Math.sin(radX);
+			this.direction[1] = Math.sin(radY);
+			this.direction[2] = Math.cos(radY) * Math.cos(radX);
 		}
 	}
 	cam.updateDir();
@@ -178,44 +220,97 @@ async function init() {
 		}
 		return obj as {points: mat3x3, normals: mat3x3};
 	}
+	for (let i = 0; i < models.length; i++) {
+		const model = models[i];
+		for (let i = 0; i < model.triangles.length; i++) {
+			model.triangles[i].index = Math.floor(triangles.length / 24);
+			// obj.triangles[i].index = i;
+			let t = fixTriangle(model.triangles[i]);
+			triangles.push(...[
+				...t.points.map(p => [...p, 1]).flat(),
+				...t.normals.map(p => [...p, 0]).flat(),
+			]);
+		}
+	}
 
 	function add(obj: SceneObject) {
-		if (!obj.pos) obj.pos = [0, 0, 0];
-		// if (!obj.color) obj.color = new Array(4).fill(new Array(4).fill(0)) as mat4x4;
-		// if (obj.color.length === 2) {
-		// 	obj.color.push(...new Array(2).fill(new Array(4).fill(0)));
-		// }
-		// if (!obj.light) obj.light = new Array(2).fill(new Array(4).fill(0)) as mat2x4;
+		if (!obj.position) obj.position = [0, 0, 0];
+		if (!obj.rotation) obj.rotation = [0, 0, 0];
+		if (!obj.scale) obj.scale = [1, 1, 1];
+		obj.transform = [
+			[1, 0, 0, 0],
+			[0, 1, 0, 0],
+			[0, 0, 1, 0],
+			[0, 0, 0, 1]
+		];
+
+		obj.transform = matrixMultiply(obj.transform, [
+			[1, 0, 0, obj.position[0]],
+			[0, 1, 0, obj.position[1]],
+			[0, 0, 1, obj.position[2]],
+			[0, 0, 0, 1]
+		]);
+
+		obj.transform = matrixMultiply(obj.transform, [
+			[obj.scale[0], 0, 0, 0],
+			[0, obj.scale[1], 0, 0],
+			[0, 0, obj.scale[2], 0],
+			[0, 0, 0, 1]
+		]);
+
+		const radX = (obj.rotation[0] * Math.PI) / 180;
+		const radY = (obj.rotation[1] * Math.PI) / 180;
+		const radZ = (obj.rotation[2] * Math.PI) / 180;
+		const rotX: mat4x4 = [
+			[1, 0, 0, 0],
+			[0, Math.cos(radX), -Math.sin(radX), 0],
+			[0, Math.sin(radX), Math.cos(radX), 0],
+			[0, 0, 0, 1]
+		];
+		const rotY: mat4x4 = [
+			[Math.cos(radY), 0, Math.sin(radY), 0],
+			[0, 1, 0, 0],
+			[-Math.sin(radY), 0, Math.cos(radY), 0],
+			[0, 0, 0, 1]
+		];
+		const rotZ: mat4x4 = [
+			[Math.cos(radZ), -Math.sin(radZ), 0, 0],
+			[Math.sin(radZ), Math.cos(radZ), 0, 0],
+			[0, 0, 1, 0],
+			[0, 0, 0, 1]
+		];
+		obj.transform = matrixMultiply(obj.transform, rotX);
+		obj.transform = matrixMultiply(obj.transform, rotY);
+		obj.transform = matrixMultiply(obj.transform, rotZ);
+
+		for (let i = 0; i < 4; i++) {
+			for (let j = 0; j < 4; j++) {
+				if (Math.abs(obj.transform[i][j]) < 1e-6) {
+					obj.transform[i][j] = 0;
+				}
+			}
+		}
+
 		if (obj.type === "mesh") {
 			objs.push(...[
-				...obj.pos, 1,
-				// ...obj.color.flat(),
-				// ...obj.light.flat(),
-				// ...materialToRaw(obj.materialI),
-				obj.triangles?.length || 0, Math.floor(triangles.length / 24), 0, obj.materialI,
+				1, obj.materialI, 0, 0,
+				obj.modelI, 0, 0, 0,
+				...obj.transform.flat(),
 			]);
-			for (let i = 0; i < obj.triangles.length; i++) {
-				obj.triangles[i].index = Math.floor(triangles.length / 24);
-				// obj.triangles[i].index = i;
-				let t = fixTriangle(obj.triangles[i]);
-				triangles.push(...[
-					...t.points.map(p => [...p, 0]).flat(),
-					...t.normals.map(p => [...p, 0]).flat(),
-				]);
-			}
 		} else if (obj.type === "sphere") {
 			objs.push(...[
-				...obj.pos, 2,
-				// ...obj.color.flat(),
-				// ...obj.light.flat(),
-				// ...materialToRaw(obj.materialI),
-				obj.radius || 0, 0, 0, obj.materialI,
+				2, obj.materialI, 0, 0,
+				obj.radius || 0, 0, 0,
+				...obj.transform.flat(),
 			]);
 		}
 	}
 	for (let i = 0; i < scene.length; i++) {
 		scene[i].index = i;
 		scene[i].materialI = materials.findIndex(m => m.id === scene[i].material);
+		if (scene[i].type == "mesh") {
+			(scene[i] as Mesh).modelI = models.findIndex(m => m.id === (scene[i] as Mesh).model);
+		}
 		add(scene[i]);
 	}
 
@@ -362,8 +457,10 @@ async function init() {
 		}
 	}
 	class ObjectAABB extends AABB {
+		transform: mat4x4;
 		constructor(addToList: boolean = false, depth: number = 0, public objectI: number) {
 			super(addToList, depth, -1, -1);
+			this.transform = scene[objectI].transform;
 		}
 		get cost(): number {
 			return this.size.reduce((a, b) => a + b, 0);
@@ -456,11 +553,11 @@ async function init() {
 	scene.forEach(obj => {
 		let box: ObjectAABB;
 		if (obj.type === "mesh") {
-			box = new MeshAABB(true, 0, -1, -1, obj.index, obj.triangles.map(t => new BasicTriangle(t.points.map(p => p.map((n, i) => n + (obj?.pos![i] || 0))) as mat3x3, t.normals || [[0, 0, 0], [0, 0, 0], [0, 0, 0]], obj.index, t.index)));
+			box = new MeshAABB(true, 0, -1, -1, obj.index, models[obj.modelI].triangles.map(t => new BasicTriangle(t.points.map(p => vectorMatrixMultiply([...p, 1], obj.transform).slice(0, 3)) as mat3x3, t.normals?.map(n => vectorMatrixMultiply([...n, 0], obj.transform).slice(0, 3)) as mat3x3 || [[0, 0, 0], [0, 0, 0], [0, 0, 0]], obj.index, t.index)));
 		} else {
 			box = new ObjectAABB(true, 0, obj.index);
 			if (obj.type === "sphere") {
-				box.addPoints([[obj.pos[0] - obj.radius, obj.pos[1] - obj.radius, obj.pos[2] - obj.radius], [obj.pos[0] + obj.radius, obj.pos[1] + obj.radius, obj.pos[2] + obj.radius]]);
+				box.addPoints([[obj.position[0] - obj.radius, obj.position[1] - obj.radius, obj.position[2] - obj.radius], [obj.position[0] + obj.radius, obj.position[1] + obj.radius, obj.position[2] + obj.radius]]);
 			}
 		}
 		root.addObject(box);
@@ -713,8 +810,8 @@ async function init() {
 		for (let i = 0; i < RAYS_PER_PIXEL; i++) {
 			device.queue.writeBuffer(inputVars, 0, new Float32Array([
 				CLEAR_FRAME ? i : frame, i, 0, 0,
-				...cam.pos, cam.fov,
-				...cam.dir, 0,
+				...cam.position, cam.fov,
+				...cam.direction, 0,
 				cam.focusDistance, cam.defocusStrength, 0, 0
 			]), 0, VARS_LEN);
 			const commandEncoder = device.createCommandEncoder();
@@ -732,6 +829,8 @@ async function init() {
 		const arrayBuffer = stagingBuffer.getMappedRange(0, OUTPUT_SIZE);
 		data = new Float32Array(arrayBuffer.slice());
 		stagingBuffer.unmap();
+
+		// if (frame == 0) console.log([...data]);
 
 		device.popErrorScope().then((error) => {
 			if (error) {
@@ -773,7 +872,7 @@ async function init() {
 	}
 	await update();
 	setInterval(() => {
-		console.log("FPS: " + (framesSinceUpdate / 5).toFixed(1));
+		console.log(`FPS: ${(framesSinceUpdate / 5).toFixed(1)} (${frame * RAYS_PER_PIXEL} rays)`);
 		framesSinceUpdate = 0;
 	}, 5000);
 }

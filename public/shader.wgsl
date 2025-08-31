@@ -27,14 +27,12 @@ struct HitInfo {
 };
 
 struct Object {
-	position: vec3f,
 	typ: f32,
-	data: vec3f,
 	material: f32,
-	/*
-	posX posY posZ type
-	dat0 dat1 dat2 matI
-	*/
+	skip1: f32,
+	skip2: f32,
+	data: vec4f,
+	transform: mat4x4f
 }
 
 struct AABB {
@@ -167,7 +165,7 @@ fn main(
 		ray.position += ray.direction * 0.0001;
     }
 
-	// light = vec3f(f32(ttests) / 5.0, 0.0, f32(btests) / 12.0);
+	// light = vec3f(f32(ttests) / 100.0, 0.0, f32(btests) / 800.0);
 	// var ox: bool = light.x > 1.0;
 	// var oz: bool = light.z > 1.0;
 	// if (ox) {
@@ -298,12 +296,12 @@ fn rayAABB(ray: Ray, box: AABB) -> f32 {
 fn rayTriangle(ray: Ray, tri: BasicTriangle, obj: Object) -> HitInfo {
 	var cancel: HitInfo = HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, 0, 0);
 
-	var a: vec3f = tri.points[0].xyz + obj.position;
-	var b: vec3f = tri.points[1].xyz + obj.position;
-	var c: vec3f = tri.points[2].xyz + obj.position;
-	var normalA: vec3f = normalize(tri.normals[0].xyz);
-	var normalB: vec3f = normalize(tri.normals[1].xyz);
-	var normalC: vec3f = normalize(tri.normals[2].xyz);
+	var a: vec3f = (tri.points[0] * obj.transform).xyz;
+	var b: vec3f = (tri.points[1] * obj.transform).xyz;
+	var c: vec3f = (tri.points[2] * obj.transform).xyz;
+	var normalA: vec3f = normalize((tri.normals[0] * obj.transform).xyz);
+	var normalB: vec3f = normalize((tri.normals[1] * obj.transform).xyz);
+	var normalC: vec3f = normalize((tri.normals[2] * obj.transform).xyz);
 
 	var edgeAB = b - a;
 	var edgeAC = c - a;
@@ -342,7 +340,9 @@ fn rayTriangle(ray: Ray, tri: BasicTriangle, obj: Object) -> HitInfo {
 	);
 }
 fn raySphere(ray: Ray, obj: Object) -> HitInfo {
-	var center: vec3f = obj.position;
+	// TODO: full matrix
+	// var center: vec3f = obj.position;
+	var center: vec3f = obj.transform[3].xyz;
 	var radius: f32 = obj.data[0];
 	var oc: vec3f = ray.position - center;
 	var a: f32 = dot(ray.direction, ray.direction);
