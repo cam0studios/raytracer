@@ -19,8 +19,8 @@
     {
         "id": "green",
         "type": "diffuse",
-        "color": [0.2, 0.8, 0.2],
-        "smoothness": 0
+        "color": "grid",
+		"smoothness": "grid_refl"
     },
     {
         "id": "white",

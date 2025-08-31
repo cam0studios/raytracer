@@ -10,6 +10,8 @@ var<storage, read_write> boxes: array<AABB>;
 var<storage, read_write> triangles: array<BasicTriangle>;
 @group(0) @binding(5)
 var<storage, read_write> materials: array<Material>;
+@group(0) @binding(6)
+var<storage, read_write> textures: array<vec4f>;
 
 struct Ray {
 	position: vec3f,
@@ -22,6 +24,7 @@ struct HitInfo {
 	index: i32,
 	dot: f32,
 	backface: bool,
+	uv: vec2f,
 	ttests: i32,
 	btests: i32
 };
@@ -50,6 +53,7 @@ struct AABB {
 struct BasicTriangle {
 	points: mat3x4f,
 	normals: mat3x4f,
+	uvs: mat3x2f,
 }
 
 struct Material {
@@ -123,25 +127,30 @@ fn main(
 
 		ray.position += ray.direction * hit.distance;
 
-		if (material.color[0].w == 0) {
+		var typ: f32 = material.color[0][3];
+		light += material.light[0].xyz * material.light[0][3] * color;
+		if (typ == 0) {
 			if (!hit.backface) {
-				light += material.light[0].xyz * material.light[0].w * color;
-				if (material.color[0].x == 0.0 && material.color[0].y == 0.0 && material.color[0].z == 0.0 && material.color[1][1] == 0.0) {
+				var col: vec3f = fixVec3(material.color[0].xyz, hit.uv);
+				var smoothness: f32 = fixF(material.color[1][0], hit.uv);
+				var coatingStrength: f32 = fixF(material.color[1][1], hit.uv);
+				var coatingCol: vec3f = fixVec3(material.color[2].xyz, hit.uv);
+				var coatingSmooth: f32 = fixF(material.color[2][3], hit.uv);
+				if (col.x == 0.0 && col.y == 0.0 && col.z == 0.0 && coatingStrength == 0.0) {
 					break;
 				}
 				var reflDir: vec3f = reflect(ray.direction, hit.normal);
 				var randDir: vec3f = normalize(hit.normal + randomDir(&rngState));
-				if (rng(&rngState) < material.color[1][1]) {
-					ray.direction = normalize(reflDir * material.color[2][3] + randDir * (1.0 - material.color[2][3]));
-					color *= material.color[2].xyz;
+				if (rng(&rngState) < coatingStrength) {
+					ray.direction = normalize(reflDir * coatingSmooth + randDir * (1.0 - coatingSmooth));
+					color *= coatingCol;
 				} else {
-					ray.direction = normalize(reflDir * material.color[1][0] + randDir * (1.0 - material.color[1][0]));
-					color *= material.color[0].xyz;
+					ray.direction = normalize(reflDir * smoothness + randDir * (1.0 - smoothness));
+					color *= col;
 				}
 
 			}
-		} else if (material.color[0].w == 1) {
-			light += material.light[0].xyz * material.light[0].w * color;
+		} else if (typ == 1) {
 			color *= material.color[0].xyz;
 			if (hit.backface) {
 				color *= vec3f(pow(material.color[1].x, hit.distance), pow(material.color[1].y, hit.distance), pow(material.color[1].z, hit.distance));
@@ -196,7 +205,7 @@ fn main(
 fn test(
     ray: Ray,
 ) -> HitInfo {
-	var closest: HitInfo = HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, 0, 0);
+	var closest: HitInfo = HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, vec2f(0, 0), 0, 0);
 	var ttests: i32 = 0;
 	var btests: i32 = 1;
 	if (rayAABB(ray, boxes[0]) == -1.0) {
@@ -294,7 +303,7 @@ fn rayAABB(ray: Ray, box: AABB) -> f32 {
 	return -1.0;
 }
 fn rayTriangle(ray: Ray, tri: BasicTriangle, obj: Object) -> HitInfo {
-	var cancel: HitInfo = HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, 0, 0);
+	var cancel: HitInfo = HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, vec2f(0, 0), 0, 0);
 
 	var a: vec3f = (tri.points[0] * obj.transform).xyz;
 	var b: vec3f = (tri.points[1] * obj.transform).xyz;
@@ -302,6 +311,9 @@ fn rayTriangle(ray: Ray, tri: BasicTriangle, obj: Object) -> HitInfo {
 	var normalA: vec3f = normalize((tri.normals[0] * obj.transform).xyz);
 	var normalB: vec3f = normalize((tri.normals[1] * obj.transform).xyz);
 	var normalC: vec3f = normalize((tri.normals[2] * obj.transform).xyz);
+	var uvA: vec2f = tri.uvs[0];
+	var uvB: vec2f = tri.uvs[1];
+	var uvC: vec2f = tri.uvs[2];
 
 	var edgeAB = b - a;
 	var edgeAC = c - a;
@@ -335,6 +347,7 @@ fn rayTriangle(ray: Ray, tri: BasicTriangle, obj: Object) -> HitInfo {
 		0,
 		0.0,
 		false,
+		uvA * w + uvB * u + uvC * v,
 		0,
 		0
 	);
@@ -368,7 +381,7 @@ fn raySphere(ray: Ray, obj: Object) -> HitInfo {
 		}
 	}
 	if (i < 0) {
-		return HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, 0, 0);
+		return HitInfo(vec3f(0.0, 0.0, 0.0), 0.0, -1, 0.0, false, vec2f(0, 0), 0, 0);
 	}
 	var normal: vec3f = normalize(oc + ray.direction * d);
 	return HitInfo(
@@ -377,9 +390,28 @@ fn raySphere(ray: Ray, obj: Object) -> HitInfo {
 		i,
 		0.0,
 		false,
+		vec2f(0, 0),
 		0,
 		0
 	);
+}
+
+fn fixVec3(value: vec3f, uv: vec2f) -> vec3f {
+	if (value[0] < 0.0) {
+		return sampleTexture(i32(-value[0] - 1), uv);
+	} else {
+		return value;
+	}
+}
+fn fixF(value: f32, uv: vec2f) -> f32 {
+	if (value < 0.0) {
+		return sampleTexture(i32(-value - 1), uv).x;
+	} else {
+		return value;
+	}
+}
+fn sampleTexture(i: i32, uv: vec2f) -> vec3f {
+	return textures[i + i32(floor(uv.x * textures[i].x) * textures[i].y + floor(uv.y * textures[i].y)) + 1].xyz;
 }
 
 fn refract(ray: vec3f, normal: vec3f, ior: f32) -> vec3f {

@@ -3,10 +3,13 @@ import rawShader from "../public/shader.wgsl";
 import rawScene from "./scene.json";
 import rawMaterials from "./materials.json";
 import rawModels from "./models.json";
+import rawTextures from "./textures.json";
 
+type vec2 = [number, number];
 type vec3 = [number, number, number];
 type vec4 = [number, number, number, number];
 type mat2x4 = [vec4, vec4];
+type mat3x2 = [vec2, vec2, vec2];
 type mat3x3 = [vec3, vec3, vec3];
 type mat4x4 = [vec4, vec4, vec4, vec4];
 function matrixMultiply(mat1: mat4x4, mat2: mat4x4): mat4x4 {
@@ -59,30 +62,61 @@ interface Sphere extends BasicObject {
 	radius: number;
 }
 type SceneObject = Mesh | Sphere;
-const scene = rawScene as unknown as SceneObject[];
+const scene = rawScene as SceneObject[];
+
+interface Texture {
+	id: string;
+	index: number;
+	source?: string;
+	data: {
+		width: number;
+		height: number;
+		pixels: vec4[];
+	};
+}
+const textures = rawTextures as Texture[];
+function getTexture(id: string) {
+	return textures.find(t => t.id === id);
+}
+function numToTexture(data: number | string | undefined) {
+	if (typeof data === "string") {
+		let i = getTexture(data)?.index;
+		if (i === undefined) i = -1;
+		return -i - 1;
+	}
+	return data || 0;
+}
+function vec3ToTexture(data: vec3 | string | undefined) {
+	if (typeof data === "string") {
+		let i = getTexture(data)?.index;
+		if (i === undefined) i = -1;
+		return [-i - 1, 0, 0];
+	}
+	return data || [0, 0, 0];
+}
 
 interface BasicMaterial {
 	type: "basic" | string;
 	id: string;
-	emission?: vec4;
+	emission?: vec4 | string;
 }
 interface Diffuse extends BasicMaterial {
 	type: "diffuse";
-	color: vec3;
-	smoothness: number;
+	color: vec3 | string;
+	smoothness: number | string;
 	coating?: {
-		color: vec3;
-		smoothness: number;
-		strength: number;
+		color: vec3 | string;
+		smoothness: number | string;
+		strength: number | string;
 	};
 }
 interface Dielectric extends BasicMaterial {
 	type: "dielectric";
-	color: vec3;
-	tint: vec3;
-	reflect: vec3;
-	smoothness: number;
-	ior: number;
+	color: vec3 | string;
+	tint: vec3 | string;
+	reflect: vec3 | string;
+	smoothness: number | string;
+	ior: number | string;
 }
 type Material = BasicMaterial | Diffuse | Dielectric;
 const materials = rawMaterials as Material[];
@@ -97,9 +131,9 @@ function materialToRaw(i: number) {
 	} else if (material.type == "diffuse") {
 		const diffuseMaterial = material as Diffuse;
 		return [
-			...diffuseMaterial.color, 0,
-			diffuseMaterial.smoothness, diffuseMaterial.coating?.strength || 0, 0, 0,
-			...diffuseMaterial.coating?.color || [0, 0, 0], diffuseMaterial.coating?.smoothness || 0,
+			...vec3ToTexture(diffuseMaterial.color), 0,
+			numToTexture(diffuseMaterial.smoothness), numToTexture(diffuseMaterial.coating?.strength), 0, 0,
+			...vec3ToTexture(diffuseMaterial.coating?.color), numToTexture(diffuseMaterial.coating?.smoothness),
 			0, 0, 0, 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
@@ -108,9 +142,9 @@ function materialToRaw(i: number) {
 	} else if (material.type == "dielectric") {
 		const dielectricMaterial = material as Dielectric;
 		return [
-			...dielectricMaterial.color, 1,
-			...dielectricMaterial.tint, dielectricMaterial.ior,
-			...dielectricMaterial.reflect, 0,
+			...vec3ToTexture(dielectricMaterial.color), 1,
+			...vec3ToTexture(dielectricMaterial.tint), numToTexture(dielectricMaterial.ior),
+			...vec3ToTexture(dielectricMaterial.reflect), 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
 			0, 0, 0, 0,
@@ -123,7 +157,7 @@ function materialToRaw(i: number) {
 
 interface Model {
 	id: string;
-	triangles: { points: mat3x3, normals?: mat3x3, index: number }[];
+	triangles: { points: mat3x3, uvs?: mat3x2, normals?: mat3x3, index: number }[];
 }
 const models = rawModels as Model[];
 
@@ -172,6 +206,7 @@ async function init() {
 	let boxNums: number[] = [];
 	let triangles: number[] = [];
 	let materialNums: number[] = [];
+	let textureNums: number[] = [];
 
 	var cam = {
 		position: [0, 0, 25],
@@ -190,7 +225,7 @@ async function init() {
 	}
 	cam.updateDir();
 
-	function fixTriangle(obj: {points?: mat3x3, normals?: mat3x3}): {points: mat3x3, normals: mat3x3} {
+	function fixTriangle(obj: {points?: mat3x3, normals?: mat3x3, uvs?: mat3x2}): {points: mat3x3, normals: mat3x3, uvs: mat3x2} {
 		if (!obj.normals) {
 			if (obj.points) {
 				let edgeAB = obj.points[1].map((v, i) => v - obj.points![0][i]);
@@ -218,17 +253,25 @@ async function init() {
 				[0, 0, 0]
 			];
 		}
-		return obj as {points: mat3x3, normals: mat3x3};
+		if (!obj.uvs) {
+			obj.uvs = [
+				[0, 0],
+				[0, 0],
+				[0, 0]
+			]
+		}
+		return obj as {points: mat3x3, normals: mat3x3, uvs: mat3x2};
 	}
 	for (let i = 0; i < models.length; i++) {
 		const model = models[i];
 		for (let i = 0; i < model.triangles.length; i++) {
-			model.triangles[i].index = Math.floor(triangles.length / 24);
+			model.triangles[i].index = Math.floor(triangles.length / 32);
 			// obj.triangles[i].index = i;
 			let t = fixTriangle(model.triangles[i]);
 			triangles.push(...[
 				...t.points.map(p => [...p, 1]).flat(),
 				...t.normals.map(p => [...p, 0]).flat(),
+				...t.uvs.flat(), 0, 0
 			]);
 		}
 	}
@@ -573,6 +616,14 @@ async function init() {
 		]);
 	});
 
+	textures.forEach(tex => {
+		tex.index = textureNums.length / 4;
+		textureNums.push(...[
+			tex.data.width, tex.data.height, 0, 0,
+			...tex.data.pixels.flat()
+		]);
+	});
+
 	materials.forEach((m, i) => {
 		materialNums.push(...materialToRaw(i));
 	});
@@ -631,6 +682,10 @@ async function init() {
 	const MATERIALS_SIZE = MATERIALS_LEN * 4;
 	let rawMaterials = new Float32Array(materialNums);
 
+	const TEXTURES_LEN = textureNums.length;
+	const TEXTURES_SIZE = TEXTURES_LEN * 4;
+	let rawTextures = new Float32Array(textureNums);
+
 	let shader: string = rawShader;
 
 	shader = shader.replaceAll("$OBJECT_CT", (OBJS_LEN / 8).toString());
@@ -670,6 +725,12 @@ async function init() {
 		usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 	});
 	device.queue.writeBuffer(materialsBuffer, 0, rawMaterials, 0, MATERIALS_LEN);
+
+	const texturesBuffer = device.createBuffer({
+		size: TEXTURES_SIZE,
+		usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+	});
+	device.queue.writeBuffer(texturesBuffer, 0, rawTextures, 0, TEXTURES_LEN);
 
 	const output = device.createBuffer({
 		size: OUTPUT_SIZE,
@@ -729,7 +790,14 @@ async function init() {
 				buffer: {
 					type: "storage",
 				},
-			}
+			},
+			{
+				binding: 6,
+				visibility: GPUShaderStage.COMPUTE,
+				buffer: {
+					type: "storage",
+				},
+			},
 		],
 	});
 
@@ -771,7 +839,13 @@ async function init() {
 				resource: {
 					buffer: materialsBuffer,
 				}
-			}
+			},
+			{
+				binding: 6,
+				resource: {
+					buffer: texturesBuffer,
+				}
+			},
 		],
 	});
 
