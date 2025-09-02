@@ -80,9 +80,22 @@ function getTexture(id: string) {
 }
 function numToTexture(data: number | string | undefined) {
 	if (typeof data === "string") {
-		let i = getTexture(data)?.index;
+		let name = data.split("|")[0].trim();
+		let channelStr = data.split("|")[1]?.trim() || "0";
+		let channel = parseInt(channelStr);
+		if (isNaN(channel)) {
+			if (channelStr === "r" || channelStr === "red") channel = 0;
+			else if (channelStr === "g" || channelStr === "green") channel = 1;
+			else if (channelStr === "b" || channelStr === "blue") channel = 2;
+			else if (channelStr === "a" || channelStr === "alpha") channel = 3;
+			else if (channelStr === "x") channel = 0;
+			else if (channelStr === "y") channel = 1;
+			else if (channelStr === "z") channel = 2;
+			else if (channelStr === "w") channel = 3;
+		}
+		let i = getTexture(name)?.index;
 		if (i === undefined) i = -1;
-		return -i - 1;
+		return -i - 1 - (channel + 1) / 8;
 	}
 	return data || 0;
 }
@@ -191,14 +204,14 @@ async function init() {
 
 	device.pushErrorScope("validation");
 
-	const SIZE = 1024;
-	const RAYS_PER_PIXEL = 10;
+	const SIZE = 256;
+	const RAYS_PER_PIXEL = 5;
 	const OUTPUT_LEN = SIZE * SIZE * 4;
 	const OUTPUT_SIZE = OUTPUT_LEN * 4;
 	const VARS_LEN = 16;
 	const VARS_SIZE = VARS_LEN * 4;
 	const CLEAR_FRAME = false;
-	const BOUNCES = 15;
+	const BOUNCES = 10;
 	const MAX_DEPTH = 100;
 	const SCENE_TESTS_PER_AXIS = 32;
 	const MESH_TESTS_PER_AXIS = 32;

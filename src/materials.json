@@ -20,7 +20,7 @@
         "id": "green",
         "type": "diffuse",
         "color": "grid",
-		"smoothness": "grid_refl"
+		"smoothness": "grid_refl | 0"
     },
     {
         "id": "white",

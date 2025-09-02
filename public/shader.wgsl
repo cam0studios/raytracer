@@ -398,20 +398,20 @@ fn raySphere(ray: Ray, obj: Object) -> HitInfo {
 
 fn fixVec3(value: vec3f, uv: vec2f) -> vec3f {
 	if (value[0] < 0.0) {
-		return sampleTexture(i32(-value[0] - 1), uv);
+		return sampleTexture(i32(-value[0] - 1), uv).xyz;
 	} else {
 		return value;
 	}
 }
 fn fixF(value: f32, uv: vec2f) -> f32 {
 	if (value < 0.0) {
-		return sampleTexture(i32(-value - 1), uv).x;
+		return sampleTexture(i32(-value - 1), uv)[i32(floor((-value) % 1 * 8.0 - 1.0))];
 	} else {
 		return value;
 	}
 }
-fn sampleTexture(i: i32, uv: vec2f) -> vec3f {
-	return textures[i + i32(floor(uv.x * textures[i].x) * textures[i].y + floor(uv.y * textures[i].y)) + 1].xyz;
+fn sampleTexture(i: i32, uv: vec2f) -> vec4f {
+	return textures[i + i32(floor(uv.x * textures[i].x) * textures[i].y + floor(uv.y * textures[i].y)) + 1];
 }
 
 fn refract(ray: vec3f, normal: vec3f, ior: f32) -> vec3f {
