@@ -411,7 +411,37 @@ fn fixF(value: f32, uv: vec2f) -> f32 {
 	}
 }
 fn sampleTexture(i: i32, uv: vec2f) -> vec4f {
-	return textures[i + i32(floor(uv.x * textures[i].x) * textures[i].y + floor(uv.y * textures[i].y)) + 1];
+	var tex: vec4f = textures[i];
+	var lerpMode: i32 = i32(tex.z);
+	var texI: i32 = i + i32(floor(uv.x * tex.x) * tex.y + floor(uv.y * tex.y));
+	if (lerpMode == 0) {
+		return textures[texI + 1];
+	}
+	var x: i32 = i32(floor(uv.x * tex.x - 0.5));
+	var y: i32 = i32(floor(uv.y * tex.y - 0.5));
+	if (lerpMode == 1 || lerpMode == 2) {
+		var left: i32 = max(x, 0);
+		var right: i32 = min(x + 1, i32(tex.x) - 1);
+		var top: i32 = max(y, 0) * i32(tex.x);
+		var bottom: i32 = min(y + 1, i32(tex.y) - 1) * i32(tex.x);
+		var topLeftI: i32 = left + top;
+		var topRightI: i32 = right + top;
+		var bottomLeftI: i32 = left + bottom;
+		var bottomRightI: i32 = right + bottom;
+		var fx: f32 = (uv.x * tex.x - 0.5) % 1.0;
+		var fy: f32 = (uv.y * tex.y - 0.5) % 1.0;
+		if (lerpMode == 2) {
+			fx = fx * fx * (3.0 - 2.0 * fx);
+			fy = fy * fy * (3.0 - 2.0 * fy);
+		}
+		var topCol: vec4f = lerp4(textures[i + topLeftI + 1], textures[i + topRightI + 1], fx);
+		var bottomCol: vec4f = lerp4(textures[i + bottomLeftI + 1], textures[i + bottomRightI + 1], fx);
+		return lerp4(topCol, bottomCol, fy);
+	}
+	return textures[texI + 1];
+}
+fn lerp4(a: vec4f, b: vec4f, f: f32) -> vec4f {
+	return a * (1.0 - f) + b * f;
 }
 
 fn refract(ray: vec3f, normal: vec3f, ior: f32) -> vec3f {

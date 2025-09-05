@@ -68,6 +68,7 @@ interface Texture {
 	id: string;
 	index: number;
 	source?: string;
+	lerpMode?: "nearest" | "linear";
 	data: {
 		width: number;
 		height: number;
@@ -632,7 +633,7 @@ async function init() {
 	textures.forEach(tex => {
 		tex.index = textureNums.length / 4;
 		textureNums.push(...[
-			tex.data.width, tex.data.height, 0, 0,
+			tex.data.width, tex.data.height, tex.lerpMode == "nearest" ? 0 : tex.lerpMode == "linear" ? 1 : tex.lerpMode == "cubic" ? 2 : 0, 0,
 			...tex.data.pixels.flat()
 		]);
 	});
