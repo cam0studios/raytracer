@@ -205,8 +205,8 @@ async function init() {
 
 	device.pushErrorScope("validation");
 
-	const SIZE = 256;
-	const RAYS_PER_PIXEL = 5;
+	const SIZE = 1024;
+	const RAYS_PER_PIXEL = 50;
 	const OUTPUT_LEN = SIZE * SIZE * 4;
 	const OUTPUT_SIZE = OUTPUT_LEN * 4;
 	const VARS_LEN = 16;

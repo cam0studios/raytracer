@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Awefilled Raytracer</title>
 	<script src="main.js" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/eruda" onload="eruda.init()"></script>
+	<script src="https://cdn.jsdelivr.net/npm/eruda" onload="if (location.href.includes('eruda')) eruda.init()"></script>
 	<style>
 		:root {
 			background: linear-gradient(to bottom, #000, #111, #000);
