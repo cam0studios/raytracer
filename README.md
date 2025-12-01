@@ -1,15 +1,10 @@
-# template
+# cam0studios/raytracer
 
-To install dependencies:
+A fairly simple raytracer made with TypeScript and WebGPU
 
-```bash
-bun install
-```
+## Features
 
-To run:
-
-```bash
-bun run main.js
-```
-
-This project was created using `bun init` in bun v1.1.43. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+- Lambertian and dielectric materials
+- Textures with different interpolation modes
+- Hardware acceleration
+- Optimized with a bounding volume hierarchy
