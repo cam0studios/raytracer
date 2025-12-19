@@ -1,3 +1,19 @@
+const params = new URL(location.href).searchParams;
+
+const SIZE = parseInt(params.get("size") || params.get("res") || params.get("resolution") || "128");
+const RAYS_PER_PIXEL = parseInt(params.get("rays") || params.get("frames") || "1");
+const BOUNCES = parseInt(params.get("bounces") || "5");
+
+const OUTPUT_LEN = SIZE * SIZE * 4;
+const OUTPUT_SIZE = OUTPUT_LEN * 4;
+const VARS_LEN = 16;
+const VARS_SIZE = VARS_LEN * 4;
+const CLEAR_FRAME = false;
+const MAX_DEPTH = 100;
+const SCENE_TESTS_PER_AXIS = 32;
+const MESH_TESTS_PER_AXIS = 32;
+
+
 // @ts-ignore-next-line
 import rawShader from "../public/shader.wgsl";
 import rawScene from "./scene.json";
@@ -195,7 +211,7 @@ async function init() {
 		throw Error("WebGPU not supported.");
 	}
 
-	const adapter = await navigator.gpu.requestAdapter();
+	const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
 	if (!adapter) throw Error("Couldn't request WebGPU adapter.");
 	
 	const device = await adapter.requestDevice();
@@ -205,17 +221,6 @@ async function init() {
 
 	device.pushErrorScope("validation");
 
-	const SIZE = 1024;
-	const RAYS_PER_PIXEL = 50;
-	const OUTPUT_LEN = SIZE * SIZE * 4;
-	const OUTPUT_SIZE = OUTPUT_LEN * 4;
-	const VARS_LEN = 16;
-	const VARS_SIZE = VARS_LEN * 4;
-	const CLEAR_FRAME = false;
-	const BOUNCES = 10;
-	const MAX_DEPTH = 100;
-	const SCENE_TESTS_PER_AXIS = 32;
-	const MESH_TESTS_PER_AXIS = 32;
 	let objs: number[] = [];
 	let boxNums: number[] = [];
 	let triangles: number[] = [];
@@ -906,7 +911,7 @@ async function init() {
 			const passEncoder = commandEncoder.beginComputePass();
 			passEncoder.setPipeline(computePipeline);
 			passEncoder.setBindGroup(0, bindGroup);
-			passEncoder.dispatchWorkgroups(Math.ceil(SIZE / 2), Math.ceil(SIZE));
+			passEncoder.dispatchWorkgroups(Math.ceil(SIZE / 16), Math.ceil(SIZE / 16));
 			passEncoder.end();
 			device.queue.submit([commandEncoder.finish()]);
 		}
