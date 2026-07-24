@@ -1,0 +1,1 @@
+// shared structs (ray, hit data)
