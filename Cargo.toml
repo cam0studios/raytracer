@@ -8,5 +8,9 @@ env_logger = "0.11.11"
 glam = "0.33.2"
 log = "0.4.33"
 pollster = "1.0.1"
+wesl = "0.4.1"
 wgpu = "30.0.0"
 winit = "0.30.13"
+
+[profile.release]
+strip = true

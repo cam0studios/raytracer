@@ -1,1 +1,1 @@
-// create indirect dispatch buffers, 2 separate entry points
+// format indirect dispatch buffers, 2 separate entry points for extend and materials

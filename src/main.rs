@@ -1,7 +1,13 @@
-// wgpu setup, window init, frame loop
+// wgpu setup, frame loop
+
+// mod buffers;
+// mod pipeline;
+// mod scene;
+mod window;
 
 fn main() {
-    println!("Hello, world!");
+    // let pipeline = pipeline::Pipeline::new();
+    let window_manager = window::WindowManager::new();
 }
 
 /*
@@ -13,9 +19,12 @@ NOTES:
   - dispatch steps with thread count equal to active counter
   - set active counter buffers as indirect to use as dispatch dimensions
   - 2 separate entry points in prep indirect
+  - render pass to draw storage buffer to surface
 
 TO DO LATER:
   - Russian roulette in lambertian/dielectric
   - Shadow rays
+  - Spectral instead of RGB
+  - Shader hot reloading
 
 */

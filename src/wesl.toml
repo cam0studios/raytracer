@@ -1,4 +1,0 @@
-edition = "2026_pre"
-package-manager = "cargo"
-root = "./shaders"
-include = [ "shaders/**/*.wesl", "shaders/**/*.wgsl" ]
