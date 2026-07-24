@@ -1,0 +1,1 @@
+// light calculation and image writing

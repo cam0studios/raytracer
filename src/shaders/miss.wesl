@@ -1,1 +1,1 @@
-// stream compaction
+// skybox calculation
