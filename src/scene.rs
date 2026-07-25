@@ -7,6 +7,8 @@ aabb: pos vec3, size vec3
 
 */
 
+use std::cmp;
+
 use glam::Vec3;
 
 // Primitives
@@ -178,23 +180,20 @@ impl Bvh {
         } else {
             2
         };
-        // TODO: sort list, use median
-        let split_pos = aabb.size[split_dim] / 2.0 + aabb.pos[split_dim];
 
-        let mut primitive_is: Vec<usize> = (0..primitives.len()).collect();
-        let mut primitive_is_left: Vec<usize> = vec![];
-        let mut primitive_is_right: Vec<usize> = vec![];
-        for _ in 0..primitives.len() {
-            let primitive_i = primitive_is.pop().expect("for loop can't overloop");
-            let primitive = primitives
-                .get(primitive_i)
-                .expect("range can't be out of bounds");
-            if primitive.get_center()[split_dim] <= split_pos {
-                primitive_is_left.push(primitive_i);
-            } else {
-                primitive_is_right.push(primitive_i);
-            }
-        }
+        let mut primitive_is: Vec<(usize, f32)> = primitives
+            .iter()
+            .enumerate()
+            .map(|(i, prim)| (i, prim.get_center()[split_dim]))
+            .collect();
+        primitive_is.sort_by(|a, b| a.1.total_cmp(&b.1));
+
+        let split_i = primitives.len() / 2;
+
+        let primitive_is_left: Vec<usize> =
+            primitive_is[0..split_i].iter().map(|(i, _)| *i).collect();
+        let primitive_is_right: Vec<usize> =
+            primitive_is[split_i..].iter().map(|(i, _)| *i).collect();
 
         let bvh_left = if primitive_is_left.len() == 0 {
             None
