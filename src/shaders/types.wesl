@@ -2,10 +2,10 @@
 
 /*
 
-bvh:      box aabb, left bvh, right bvh, primitives
-aabb:     pos vec3, size vec3
-ray:      throughput RGB, origin vec3, direction vec3, pixel vec2
-hit:      dist int, normal vec3, materiali int
+bvh:      box aabbi, left bvhi, right bvhi
+aabb:     pos vec3f, size vec3f
+ray:      throughput vec3f, origin vec3f, direction vec3f, pixel vec2u
+hit:      dist f32, normal vec3f, material materieli
 indirect: dims atomic(u32)x3, count atomic(u32)
 
 */

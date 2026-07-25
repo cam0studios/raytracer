@@ -1,13 +1,14 @@
-// wgpu setup, frame loop
+// init
 
-// mod buffers;
-// mod pipeline;
-// mod scene;
+mod buffers;
+mod pipeline;
+mod scene;
 mod window;
 
 fn main() {
-    // let pipeline = pipeline::Pipeline::new();
-    let window_manager = window::WindowManager::new();
+    env_logger::init();
+    scene::test();
+    let _window_manager = window::WindowManager::new();
 }
 
 /*
