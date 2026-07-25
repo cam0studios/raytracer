@@ -15,6 +15,8 @@ pub struct BufferManager {
     // active_rays_buffer: wgpu::Buffer,
     // active_ray_counter_a: wgpu::Buffer,
     // active_ray_counter_b: wgpu::Buffer,
+    // active_ray_counter_prim: &'static wgpu::Buffer,
+    // active_ray_counter_second: &'static wgpu::Buffer,
     // intersections_buffer: wgpu::Buffer,
     // material_rays_buffer: wgpu::Buffer,
     // material_counter_buffer: wgpu::Buffer,

@@ -1,5 +1,6 @@
-use glam::Vec2;
 // wgpu compiling and encoding
+
+use glam::Vec2;
 use wesl::{StandardResolver, Wesl};
 
 use crate::{buffers::BufferManager, window::Context};
@@ -32,32 +33,15 @@ impl Pipeline {
             label: Some("Generate Shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(generate_shader_string)),
         });
-        let generate_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Generate Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::ReadWrite,
-                            format: wgpu::TextureFormat::Rgba32Float,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                        },
-                        count: None,
-                    },
-                ],
-            });
+        let generate_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Generate Pipeline"),
+            layout: None,
+            module: &generate_shader,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        let generate_bind_group_layout = generate_pipeline.get_bind_group_layout(0);
         let generate_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Generate Bind Group"),
             layout: &generate_bind_group_layout,
@@ -71,20 +55,6 @@ impl Pipeline {
                     resource: wgpu::BindingResource::TextureView(&buffers.output_view),
                 },
             ],
-        });
-        let generate_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Generate Pipeline Layout"),
-                bind_group_layouts: &[Some(&generate_bind_group_layout)],
-                immediate_size: 0,
-            });
-        let generate_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Generate Pipeline"),
-            layout: Some(&generate_pipeline_layout),
-            module: &generate_shader,
-            entry_point: Some("main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            cache: None,
         });
 
         // let extend_shader_string = Self::get_shader_string(&compiler, "extend");
@@ -101,54 +71,9 @@ impl Pipeline {
             label: Some("Blit Shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(blit_shader_string)),
         });
-        let blit_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Blit Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::ReadOnly,
-                            format: wgpu::TextureFormat::Rgba32Float,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                        },
-                        count: None,
-                    },
-                ],
-            });
-        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Blit Bind Group"),
-            layout: &blit_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.vars_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
-                },
-            ],
-        });
-        let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Blit Pipeline Layout"),
-            bind_group_layouts: &[Some(&blit_bind_group_layout)],
-            immediate_size: 0,
-        });
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Blit Pipeline"),
-            layout: Some(&blit_pipeline_layout),
+            layout: None,
             vertex: wgpu::VertexState {
                 module: &blit_shader,
                 entry_point: Some("vs_main"),
@@ -183,6 +108,21 @@ impl Pipeline {
             cache: None,
             multiview_mask: None,
         });
+        let blit_bind_group_layout = blit_pipeline.get_bind_group_layout(0);
+        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &blit_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
+                },
+            ],
+        });
 
         Self {
             generate_pipeline,
@@ -205,6 +145,7 @@ impl Pipeline {
             .to_string()
     }
 
+    // RENDER LOOP
     pub fn render(&self, context: &Context) -> anyhow::Result<()> {
         let output = match context.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
@@ -231,6 +172,8 @@ impl Pipeline {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        // START
 
         // GENERATE PASS
         {
@@ -289,17 +232,22 @@ CPU: write scene data
 FOR EVERY FRAME:
     camera data  --- generate.wesl -->  ray buffer + active indices+counter
     CPU: write extend indirect buffer
+    BARRIER
 
     FOR EVERY BOUNCE:
         ray buffer, scene  >---------------------------------- extend.wesl --------->  intersection buffer
         CPU: clear material counters
+        BARRIER
         intersection buffer  >-------------------------------- sort.wesl ----------->  material indices+counters
-        material indirect buffer  >--------------------------- prep_indirect.wesl -->  material indirect buffer
-        lambertian indices+counter, ray buffer, materials  >-- lambertian.wesl ----->  new active indices buffer
-        dielectric indices+counter, ray buffer, materials  >-- dielectric.wesl ----->  new active indices buffer
+        BARRIER
+        material counters  >---------------------------------- prep_indirect.wesl -->  material indirect buffer
+        BARRIER
+        lambertian indices+counter, ray buffer, materials  >-- lambertian.wesl ----->  new active indices+counter
+        dielectric indices+counter, ray buffer, materials  >-- dielectric.wesl ----->  new active indices+counter
         emissive indices+counter, ray buffer, materials  >---- emissive.wesl ------->  output buffer
         miss indices+counter, ray buffer  >------------------- miss.wesl ----------->  output buffer
-        extend indirect buffer  >----------------------------- prep_indirect.wesl -->  extend indirect buffer
+        BARRIER
+        new active counter  >--------------------------------- prep_indirect.wesl -->  extend indirect buffer
         CPU: swap old and new active indices buffers and counters, clear used one
 
     output buffer, frame count  --- blit.wesl -->  output image

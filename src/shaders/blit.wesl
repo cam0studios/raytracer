@@ -28,5 +28,6 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    return textureLoad(output, vec2i(in.uv * vars.size));
+    let size = vec2f(vars.size);
+    return textureLoad(output, vec2i(in.position.xy));
 }
