@@ -1,14 +1,5 @@
 // scene data, bvh
 
-/*
-
-bvh:  box aabb, left bvh, right bvh, primitives
-aabb: pos vec3, size vec3
-
-*/
-
-use std::cmp;
-
 use glam::Vec3;
 
 // Primitives
@@ -292,3 +283,10 @@ pub fn test() {
     let bvh = Bvh::from_primitives(&primitives);
     println!("{}", bvh.to_string());
 }
+
+/*
+
+bvh:  box aabb, left bvh, right bvh, primitives
+aabb: pos vec3, size vec3
+
+*/

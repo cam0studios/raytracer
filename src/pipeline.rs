@@ -1,7 +1,7 @@
 // wgpu compiling and encoding
 use wesl::{StandardResolver, Wesl};
 
-use crate::window::Context;
+use crate::{buffers::BufferManager, window::Context};
 
 pub struct Pipeline {
     // pub generate_pipeline: wgpu::ComputePipeline,
@@ -14,6 +14,7 @@ pub struct Pipeline {
     // pub miss_pipeline: wgpu::ComputePipeline,
     // pub prep_indirect_extend_pipeline: wgpu::ComputePipeline,
     pub blit_pipeline: wgpu::RenderPipeline,
+    pub buffers: BufferManager,
 }
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
@@ -73,7 +74,13 @@ impl Pipeline {
             cache: None,
             multiview_mask: None,
         });
-        Self { blit_pipeline }
+
+        let buffers = BufferManager::new(device, config);
+
+        Self {
+            blit_pipeline,
+            buffers,
+        }
     }
 
     fn get_shader_string(compiler: &Wesl<StandardResolver>, name: &str) -> String {
