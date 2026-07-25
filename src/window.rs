@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use wgpu::TextureUsages;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -48,7 +47,7 @@ impl Context {
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: wgpu::Features::empty(),
+                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: wgpu::Limits::default(),
                 memory_hints: Default::default(),

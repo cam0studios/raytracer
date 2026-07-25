@@ -1,5 +1,12 @@
 // draw output buffer to screen
 
+import super::types::Vars;
+
+@group(0) @binding(0)
+var<uniform> vars: Vars;
+@group(0) @binding(1)
+var output: texture_storage_2d<rgba32float, read>;
+
 struct VertexOutput {
     @builtin(position) position: vec4f,
     @location(0) uv: vec2f}
@@ -21,5 +28,5 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    return vec4f(in.uv, 0.0, 1.0);
+    return textureLoad(output, vec2i(in.uv * vars.size));
 }

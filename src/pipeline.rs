@@ -1,10 +1,12 @@
+use glam::Vec2;
 // wgpu compiling and encoding
 use wesl::{StandardResolver, Wesl};
 
 use crate::{buffers::BufferManager, window::Context};
 
 pub struct Pipeline {
-    // pub generate_pipeline: wgpu::ComputePipeline,
+    pub generate_pipeline: wgpu::ComputePipeline,
+    pub generate_bind_group: wgpu::BindGroup,
     // pub extend_pipeline: wgpu::ComputePipeline,
     // pub sort_pipeline: wgpu::ComputePipeline,
     // pub prep_indirect_material_pipeline: wgpu::ComputePipeline,
@@ -14,12 +16,77 @@ pub struct Pipeline {
     // pub miss_pipeline: wgpu::ComputePipeline,
     // pub prep_indirect_extend_pipeline: wgpu::ComputePipeline,
     pub blit_pipeline: wgpu::RenderPipeline,
+    pub blit_bind_group: wgpu::BindGroup,
     pub buffers: BufferManager,
+    pub size: Vec2,
 }
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+        let buffers = BufferManager::new(device, config);
+
         let compiler = Wesl::new("src/shaders");
-        // let generate_shader_string = Self::get_shader_string(&compiler, "generate");
+
+        // GENERATE SHADER
+        let generate_shader_string = Self::get_shader_string(&compiler, "generate");
+        let generate_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Generate Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(generate_shader_string)),
+        });
+        let generate_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Generate Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::ReadWrite,
+                            format: wgpu::TextureFormat::Rgba32Float,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let generate_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Generate Bind Group"),
+            layout: &generate_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
+                },
+            ],
+        });
+        let generate_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Generate Pipeline Layout"),
+                bind_group_layouts: &[Some(&generate_bind_group_layout)],
+                immediate_size: 0,
+            });
+        let generate_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Generate Pipeline"),
+            layout: Some(&generate_pipeline_layout),
+            module: &generate_shader,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+
         // let extend_shader_string = Self::get_shader_string(&compiler, "extend");
         // let sort_shader_string = Self::get_shader_string(&compiler, "sort");
         // let prep_indirect_shader_string = Self::get_shader_string(&compiler, "prep_indirect");
@@ -27,14 +94,56 @@ impl Pipeline {
         // let dielectric_shader_string = Self::get_shader_string(&compiler, "dielectric");
         // let emissive_shader_string = Self::get_shader_string(&compiler, "emissive");
         // let miss_shader_string = Self::get_shader_string(&compiler, "miss");
+
+        // BLIT SHADER
         let blit_shader_string = Self::get_shader_string(&compiler, "blit");
         let blit_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blit Shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(blit_shader_string)),
         });
+        let blit_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Blit Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::ReadOnly,
+                            format: wgpu::TextureFormat::Rgba32Float,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &blit_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
+                },
+            ],
+        });
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blit Pipeline Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[Some(&blit_bind_group_layout)],
             immediate_size: 0,
         });
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -75,11 +184,16 @@ impl Pipeline {
             multiview_mask: None,
         });
 
-        let buffers = BufferManager::new(device, config);
-
         Self {
+            generate_pipeline,
+            generate_bind_group,
             blit_pipeline,
+            blit_bind_group,
             buffers,
+            size: Vec2 {
+                x: config.width as f32,
+                y: config.height as f32,
+            },
         }
     }
 
@@ -118,9 +232,24 @@ impl Pipeline {
                 label: Some("Render Encoder"),
             });
 
+        // GENERATE PASS
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
+            let mut generate_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Generate Pass"),
+                timestamp_writes: None,
+            });
+            generate_pass.set_pipeline(&self.generate_pipeline);
+            generate_pass.set_bind_group(0, &self.generate_bind_group, &[]);
+            generate_pass.dispatch_workgroups(
+                (self.size.x / 8.0).ceil() as u32,
+                (self.size.y / 8.0).ceil() as u32,
+                1,
+            );
+        }
+        // BLIT PASS
+        {
+            let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Blit Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -140,8 +269,9 @@ impl Pipeline {
                 timestamp_writes: None,
                 multiview_mask: None,
             });
-            render_pass.set_pipeline(&self.blit_pipeline);
-            render_pass.draw(0..3, 0..1);
+            blit_pass.set_pipeline(&self.blit_pipeline);
+            blit_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+            blit_pass.draw(0..3, 0..1);
         }
 
         // submit will accept anything that implements IntoIter

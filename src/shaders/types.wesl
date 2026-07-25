@@ -16,3 +16,7 @@ struct Ray {
     direction: vec3f,
     pixel: vec2u,
 }
+
+struct Vars {
+    size: vec2f,
+}

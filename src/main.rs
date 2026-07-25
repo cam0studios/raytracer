@@ -27,5 +27,6 @@ TO DO LATER:
   - Shadow rays
   - Spectral instead of RGB
   - Shader hot reloading
+  - OIDN denoising
 
 */
