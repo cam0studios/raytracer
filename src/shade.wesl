@@ -1,1 +1,0 @@
-// accumulate shaded values, calculate ray termination and bounces

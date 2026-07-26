@@ -13,7 +13,8 @@ indirect:  count atomic(i32), _ atomic(i32), _ atomic(i32), next count atomic(i3
 struct Vars {
     size: vec2u,
     frame: u32,
-    bounce: u32}
+    bounce: u32,
+}
 
 struct Aabb {
     pos: vec3f,
@@ -44,8 +45,8 @@ struct Intersection {
 }
 
 struct Indirect {
-    count: atomic<i32>,
-    dim_y: atomic<i32>,
-    dim_z: atomic<i32>,
-    next_count: atomic<i32>,
+    dim_x: i32,
+    dim_y: i32,
+    dim_z: i32,
+    count: i32,
 }

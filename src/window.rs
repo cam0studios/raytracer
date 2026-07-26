@@ -104,7 +104,7 @@ impl State {
                 .configure(&self.context.device, &self.context.config);
 
             if !self.context.is_surface_configured {
-                println!("setup");
+                log::info!("Window configured");
                 self.window.set_visible(true);
                 self.context.is_surface_configured = true;
             }

@@ -8,7 +8,8 @@ pub struct BufferManager {
     // static size
     pub vars: Vars, // Vars
     pub vars_buffer: wgpu::Buffer,
-    pub active_ray_counter: wgpu::Buffer, // Indirect
+    pub active_ray_counter: wgpu::Buffer,  // atomic
+    pub active_ray_indirect: wgpu::Buffer, // Indirect
     // scene dependent
     // pub bvh: Vec<f32>, // Bvh[# node]
     // pub bvh_buffer: wgpu::Buffer,
@@ -41,8 +42,14 @@ impl BufferManager {
         let active_ray_counter = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Active Ray Counter"),
             mapped_at_creation: false,
+            size: 4,
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        let active_ray_indirect = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Active Ray Counter"),
+            mapped_at_creation: false,
             size: 16,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::INDIRECT,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
         });
 
         let size_dependent = Self::get_size_dependent_buffers(device, size);
@@ -51,6 +58,7 @@ impl BufferManager {
             vars,
             vars_buffer,
             active_ray_counter,
+            active_ray_indirect,
             rays_buffer: size_dependent.rays_buffer,
             active_rays_buffer: size_dependent.active_rays_buffer,
             intersections_buffer: size_dependent.intersections_buffer,

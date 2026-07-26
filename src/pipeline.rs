@@ -19,7 +19,6 @@ impl Pipeline {
 
         let compiler = Wesl::new("src/shaders");
 
-        // GENERATE SHADER
         let generate_shader_string = Self::get_shader_string(&compiler, "generate");
         let generate_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Generate Shader"),
@@ -34,12 +33,39 @@ impl Pipeline {
             cache: None,
         });
 
-        // let prep_indirect_shader_string = Self::get_shader_string(&compiler, "prep_indirect");
+        let prep_indirect_shader_string = Self::get_shader_string(&compiler, "prep_indirect");
+        let prep_indirect_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Prep Indirect Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(prep_indirect_shader_string)),
+        });
+        let prep_indirect_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Prep Indirect Pipeline"),
+                layout: None,
+                module: &prep_indirect_shader,
+                entry_point: Some("main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            });
+
         // let extend_shader_string = Self::get_shader_string(&compiler, "extend");
-        // let shade_shader_string = Self::get_shader_string(&compiler, "shade");
+
+        let shade_shader_string = Self::get_shader_string(&compiler, "shade");
+        let shade_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shade Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(shade_shader_string)),
+        });
+        let shade_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Shade Pipeline"),
+            layout: None,
+            module: &shade_shader,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+
         // let compact_shader_string = Self::get_shader_string(&compiler, "compact");
 
-        // BLIT SHADER
         let blit_shader_string = Self::get_shader_string(&compiler, "blit");
         let blit_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blit Shader"),
@@ -85,11 +111,15 @@ impl Pipeline {
 
         let pipelines = Pipelines {
             generate: generate_pipeline,
+            prep_indirect: prep_indirect_pipeline,
+            shade: shade_pipeline,
             blit: blit_pipeline,
         };
 
         let bind_group_layouts = BindGroupLayouts {
             generate: pipelines.generate.get_bind_group_layout(0),
+            prep_indirect: pipelines.prep_indirect.get_bind_group_layout(0),
+            shade: pipelines.shade.get_bind_group_layout(0),
             blit: pipelines.blit.get_bind_group_layout(0),
         };
 
@@ -160,11 +190,28 @@ impl Pipeline {
             self.buffers.vars.bounce = bounce;
             self.buffers.write_vars(&context.device, &context.queue);
             // PREP INDIRECT PASS
-            // {}
+            {
+                let mut prep_indirect_pass =
+                    encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some("Prep Indirect Pass"),
+                        timestamp_writes: None,
+                    });
+                prep_indirect_pass.set_pipeline(&self.pipelines.prep_indirect);
+                prep_indirect_pass.set_bind_group(0, &self.bind_groups.prep_indirect, &[]);
+                prep_indirect_pass.dispatch_workgroups(1, 1, 1);
+            }
             // EXTEND PASS
             // {}
             // SHADE PASS
-            // {}
+            {
+                let mut shade_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Shade Pass"),
+                    timestamp_writes: None,
+                });
+                shade_pass.set_pipeline(&self.pipelines.shade);
+                shade_pass.set_bind_group(0, &self.bind_groups.shade, &[]);
+                shade_pass.dispatch_workgroups_indirect(&self.buffers.active_ray_indirect, 0);
+            }
             // COMPACT PASS
             // {}
         }
@@ -225,10 +272,70 @@ impl Pipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: buffers.rays_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffers.active_ray_counter.as_entire_binding(),
+                },
+            ],
+        });
+
+        let prep_indirect = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Prep Indirect Bind Group"),
+            layout: &layouts.prep_indirect,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.active_ray_counter.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffers.active_ray_indirect.as_entire_binding(),
+                },
+            ],
+        });
+
+        // let extend = device.create_bind_group(&wgpu::BindGroupDescriptor {
+
+        // });
+
+        let shade = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Shade Bind Group"),
+            layout: &layouts.shade,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.rays_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffers.active_ray_counter.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: buffers.active_ray_indirect.as_entire_binding(),
+                },
+                // wgpu::BindGroupEntry {
+                //     binding: 4,
+                //     resource: buffers.intersections_buffer.as_entire_binding(),
+                // },
+                wgpu::BindGroupEntry {
+                    binding: 4,
                     resource: wgpu::BindingResource::TextureView(&buffers.output_view),
                 },
             ],
         });
+
+        // let compact
 
         let blit = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Blit Bind Group"),
@@ -244,7 +351,15 @@ impl Pipeline {
                 },
             ],
         });
-        BindGroups { generate, blit }
+
+        BindGroups {
+            generate,
+            prep_indirect,
+            // extend,
+            shade,
+            // compact,
+            blit,
+        }
     }
 }
 
@@ -268,16 +383,26 @@ impl Copy for Size {}
 
 pub struct Pipelines {
     generate: wgpu::ComputePipeline,
+    prep_indirect: wgpu::ComputePipeline,
+    // extend: wgpu::ComputePipeline,
+    shade: wgpu::ComputePipeline,
+    // compact: wgpu::ComputePipeline
     blit: wgpu::RenderPipeline,
 }
 pub struct BindGroups {
     generate: wgpu::BindGroup,
-    // others
+    prep_indirect: wgpu::BindGroup,
+    // extend: wgpu::BindGroup,
+    shade: wgpu::BindGroup,
+    // compact: wgpu::BindGroup,
     blit: wgpu::BindGroup,
 }
 pub struct BindGroupLayouts {
     generate: wgpu::BindGroupLayout,
-    // other
+    prep_indirect: wgpu::BindGroupLayout,
+    // extend: wgpu::BindGroupLayout,
+    shade: wgpu::BindGroupLayout,
+    // compact: wgpu::BindGroupLayout,
     blit: wgpu::BindGroupLayout,
 }
 
@@ -289,7 +414,7 @@ FOR EVERY FRAME {
 
     CPU: write frame vars
 
-    vars  ---------------------------------------------------------------------------------------------------- generate.wesl (width x height) -->  ray buffer dense [# active], active ray counter(next)
+    vars  ----------------------------------------------------------------------------------------------------- generate.wesl (width x height) -->  ray buffer dense [# active], active ray counter(next)
 
     FOR EVERY BOUNCE {
         CPU: write bounce vars
