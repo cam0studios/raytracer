@@ -1,0 +1,1 @@
+// compact rays into dense buffer

@@ -3,24 +3,19 @@
 use wgpu::util::DeviceExt;
 
 pub struct BufferManager {
-    pub vars: Vec<f32>,
+    pub vars: Vec<f32>, // Vars
     pub vars_buffer: wgpu::Buffer,
-    // bvh: Vec<f32>,
+    // bvh: Vec<f32>, // Bvh[# node]
     // bvh_buffer: wgpu::Buffer,
-    // scene: Vec<f32>,
+    // scene: Vec<f32>, // Object[# object]
     // scene_buffer: wgpu::Buffer,
-    // materials: Vec<f32>,
+    // materials: Vec<f32>, // Material[# material]
     // materials_buffer: wgpu::Buffer,
-    // rays_buffer: wgpu::Buffer,
-    // active_rays_buffer: wgpu::Buffer,
-    // active_ray_counter_a: wgpu::Buffer,
-    // active_ray_counter_b: wgpu::Buffer,
-    // active_ray_counter_prim: &'static wgpu::Buffer,
-    // active_ray_counter_second: &'static wgpu::Buffer,
-    // intersections_buffer: wgpu::Buffer,
-    // material_rays_buffer: wgpu::Buffer,
-    // material_counter_buffer: wgpu::Buffer,
-    pub output: wgpu::Texture,
+    // rays_buffer: wgpu::Buffer, // Ray[# active]
+    // active_rays_buffer: wgpu::Buffer, // bool[# active] OR bitmap
+    // active_ray_counter: wgpu::Buffer, // Indirect
+    // intersections_buffer: wgpu::Buffer, // Intersection[# active]
+    pub output: wgpu::Texture, // Texture[swidth x sheight]
     pub output_view: wgpu::TextureView,
 }
 impl BufferManager {
@@ -57,18 +52,3 @@ impl BufferManager {
 
     // pub fn resize(&mut self) {}
 }
-
-/*
-
-bvh: BVH[]
-scene: Object[]
-materials: Material[]
-rays: Ray[]
-active ray indices a+b: u32[]
-active counters a+b: Indirect
-intersections: Intersection[]
-material indices (x4): u32[]
-material counters: Indirect x4
-output buffer: texture f32
-
-*/

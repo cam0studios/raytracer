@@ -8,14 +8,14 @@ use crate::{buffers::BufferManager, window::Context};
 pub struct Pipeline {
     pub generate_pipeline: wgpu::ComputePipeline,
     pub generate_bind_group: wgpu::BindGroup,
+    // pub prep_indirect_pipeline: wgpu::ComputePipeline,
+    // pub prep_indirect_bind_group: wgpu::BindGroup,
     // pub extend_pipeline: wgpu::ComputePipeline,
-    // pub sort_pipeline: wgpu::ComputePipeline,
-    // pub prep_indirect_material_pipeline: wgpu::ComputePipeline,
-    // pub lambertian_pipeline: wgpu::ComputePipeline,
-    // pub dielectric_pipeline: wgpu::ComputePipeline,
-    // pub emissive_pipeline: wgpu::ComputePipeline,
-    // pub miss_pipeline: wgpu::ComputePipeline,
-    // pub prep_indirect_extend_pipeline: wgpu::ComputePipeline,
+    // pub extend_bind_group: wgpu::BindGroup,
+    // pub shade_pipeline: wgpu::ComputePipeline,
+    // pub shade_bind_group: wgpu::BindGroup,
+    // pub compact_pipeline: wgpu::ComputePipeline,
+    // pub compact_bind_group: wgpu::BindGroup,
     pub blit_pipeline: wgpu::RenderPipeline,
     pub blit_bind_group: wgpu::BindGroup,
     pub buffers: BufferManager,
@@ -57,13 +57,10 @@ impl Pipeline {
             ],
         });
 
-        // let extend_shader_string = Self::get_shader_string(&compiler, "extend");
-        // let sort_shader_string = Self::get_shader_string(&compiler, "sort");
         // let prep_indirect_shader_string = Self::get_shader_string(&compiler, "prep_indirect");
-        // let lambertian_shader_string = Self::get_shader_string(&compiler, "lambertian");
-        // let dielectric_shader_string = Self::get_shader_string(&compiler, "dielectric");
-        // let emissive_shader_string = Self::get_shader_string(&compiler, "emissive");
-        // let miss_shader_string = Self::get_shader_string(&compiler, "miss");
+        // let extend_shader_string = Self::get_shader_string(&compiler, "extend");
+        // let shade_shader_string = Self::get_shader_string(&compiler, "shade");
+        // let compact_shader_string = Self::get_shader_string(&compiler, "compact");
 
         // BLIT SHADER
         let blit_shader_string = Self::get_shader_string(&compiler, "blit");
@@ -229,27 +226,29 @@ impl Pipeline {
 
 CPU: write scene data
 
-FOR EVERY FRAME:
-    camera data  --- generate.wesl -->  ray buffer + active indices+counter
-    CPU: write extend indirect buffer
-    BARRIER
+FOR EVERY FRAME {
 
-    FOR EVERY BOUNCE:
-        ray buffer, scene  >---------------------------------- extend.wesl --------->  intersection buffer
-        CPU: clear material counters
-        BARRIER
-        intersection buffer  >-------------------------------- sort.wesl ----------->  material indices+counters
-        BARRIER
-        material counters  >---------------------------------- prep_indirect.wesl -->  material indirect buffer
-        BARRIER
-        lambertian indices+counter, ray buffer, materials  >-- lambertian.wesl ----->  new active indices+counter
-        dielectric indices+counter, ray buffer, materials  >-- dielectric.wesl ----->  new active indices+counter
-        emissive indices+counter, ray buffer, materials  >---- emissive.wesl ------->  output buffer
-        miss indices+counter, ray buffer  >------------------- miss.wesl ----------->  output buffer
-        BARRIER
-        new active counter  >--------------------------------- prep_indirect.wesl -->  extend indirect buffer
-        CPU: swap old and new active indices buffers and counters, clear used one
+    CPU: write frame data
 
-    output buffer, frame count  --- blit.wesl -->  output image
+    data  ---------------------------------------------------------------------------------------------------- generate.wesl (width x height) -->  ray buffer dense [# active], active ray counter(next)
+
+    FOR EVERY BOUNCE {
+        CPU: write bounce data
+
+        data, active ray counter(next), active ray counter  >-------------------------------------------------- prep_indirect.wesl (1) ---------->  active ray counter (indirect format), active ray counter (next reset)
+
+        data, ray buffer dense [# active], scene  >------------------------------------------------------------ extend.wesl (# active) ---------->  intersection buffer [# active]
+
+        data, ray buffer dense [# active], active ray counter, intersection buffer [# active], materials  >---- shade.wesl (# active) ----------->  ray buffer sparse [# active], active rays buffer [# active], output buffer
+        // split into substeps?
+
+        data, ray buffer sparse [# active], active rays buffer [# active]  >----------------------------------- compact.wesl (# active) --------->  ray buffer dense [# next active]
+        // split into count active, compute offsets, scatter into compacted?
+        // not compact every bounce?
+    }
+
+    data, output buffer  >------------------------------------------------------------------------------------- blit.wesl ----------------------->  output image
+
+}
 
 */

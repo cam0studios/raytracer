@@ -1,5 +1,4 @@
 // camera ray generation
-// camera data -> ray buffer + active indices+counter
 
 // import super::types::Ray;
 import super::types::Vars;
