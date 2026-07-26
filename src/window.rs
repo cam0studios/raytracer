@@ -12,16 +12,20 @@ use winit::{
 use crate::pipeline::Pipeline;
 
 pub struct Context {
-    pub window: Arc<Window>,
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     pub is_surface_configured: bool,
+}
+
+pub struct State {
+    pub context: Context,
+    pub window: Arc<Window>,
     pipeline: Pipeline,
 }
 
-impl Context {
+impl State {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
@@ -79,11 +83,13 @@ impl Context {
 
         Ok(Self {
             window,
-            surface,
-            device,
-            queue,
-            config,
-            is_surface_configured: false,
+            context: Context {
+                surface,
+                device,
+                queue,
+                config,
+                is_surface_configured: false,
+            },
             pipeline,
         })
     }
@@ -91,28 +97,30 @@ impl Context {
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
             let max = 2048;
-            self.config.width = width.min(max);
-            self.config.height = height.min(max);
-            self.surface.configure(&self.device, &self.config);
-            self.is_surface_configured = true;
+            self.context.config.width = width.min(max);
+            self.context.config.height = height.min(max);
+            self.context
+                .surface
+                .configure(&self.context.device, &self.context.config);
+            self.context.is_surface_configured = true;
         }
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
         self.window.request_redraw();
 
-        if !self.is_surface_configured {
+        if !self.context.is_surface_configured {
             return Ok(());
         }
 
-        self.pipeline.render(self)?;
+        self.pipeline.render(&self.context)?;
 
         Ok(())
     }
 }
 
 pub struct WindowManager {
-    context: Option<Context>,
+    state: Option<State>,
 }
 
 impl WindowManager {
@@ -120,7 +128,7 @@ impl WindowManager {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll); // switch to wait?
 
-        let mut this = Self { context: None };
+        let mut this = Self { state: None };
         event_loop.run_app(&mut this).unwrap();
 
         this
@@ -134,14 +142,14 @@ impl ApplicationHandler for WindowManager {
             .with_visible(true);
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        self.context = Some(pollster::block_on(Context::new(window)).unwrap());
+        self.state = Some(pollster::block_on(State::new(window)).unwrap());
 
         log::info!("Window created");
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let context = match &mut self.context {
-            Some(context) => context,
+        let state = match &mut self.state {
+            Some(state) => state,
             None => return,
         };
         match event {
@@ -150,9 +158,9 @@ impl ApplicationHandler for WindowManager {
                 log::info!("Window closed");
             }
             WindowEvent::Resized(size) => {
-                context.resize(size.width, size.height);
+                state.resize(size.width, size.height);
             }
-            WindowEvent::RedrawRequested => match context.render() {
+            WindowEvent::RedrawRequested => match state.render() {
                 Ok(_) => {}
                 Err(e) => {
                     log::error!("{e}");

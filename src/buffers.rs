@@ -135,9 +135,9 @@ struct SizeDependentBuffers {
 }
 
 pub struct Vars {
-    size: (u32, u32),
-    frame: u32,
-    bounce: u32,
+    pub size: (u32, u32),
+    pub frame: u32,
+    pub bounce: u32,
 }
 impl Vars {
     pub fn to_bytes(&self) -> [u8; 16] {

@@ -5,6 +5,8 @@ use wesl::{StandardResolver, Wesl};
 
 use crate::{buffers::BufferManager, window::Context};
 
+const CONSTS: Consts = Consts { bounces: 1 };
+
 pub struct Pipeline {
     pub generate_pipeline: wgpu::ComputePipeline,
     pub generate_bind_group: wgpu::BindGroup,
@@ -143,7 +145,7 @@ impl Pipeline {
     }
 
     // RENDER LOOP
-    pub fn render(&self, context: &Context) -> anyhow::Result<()> {
+    pub fn render(&mut self, context: &Context) -> anyhow::Result<()> {
         let output = match context.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
@@ -186,6 +188,18 @@ impl Pipeline {
                 1,
             );
         }
+        for bounce in 0..CONSTS.bounces {
+            self.buffers.vars.bounce = bounce;
+            self.buffers.write_vars(&context.device, &context.queue);
+            // PREP INDIRECT PASS
+            // {}
+            // EXTEND PASS
+            // {}
+            // SHADE PASS
+            // {}
+            // COMPACT PASS
+            // {}
+        }
         // BLIT PASS
         {
             let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -214,7 +228,6 @@ impl Pipeline {
             blit_pass.draw(0..3, 0..1);
         }
 
-        // submit will accept anything that implements IntoIter
         context.queue.submit(std::iter::once(encoder.finish()));
         context.queue.present(output);
 
@@ -222,32 +235,36 @@ impl Pipeline {
     }
 }
 
+pub struct Consts {
+    bounces: u32,
+}
+
 /*
 
-CPU: write scene data
+CPU: write scene
 
 FOR EVERY FRAME {
 
-    CPU: write frame data
+    CPU: write frame vars
 
-    data  ---------------------------------------------------------------------------------------------------- generate.wesl (width x height) -->  ray buffer dense [# active], active ray counter(next)
+    vars  ---------------------------------------------------------------------------------------------------- generate.wesl (width x height) -->  ray buffer dense [# active], active ray counter(next)
 
     FOR EVERY BOUNCE {
-        CPU: write bounce data
+        CPU: write bounce vars
 
-        data, active ray counter(next), active ray counter  >-------------------------------------------------- prep_indirect.wesl (1) ---------->  active ray counter (indirect format), active ray counter (next reset)
+        vars, active ray counter(next), active ray counter  >-------------------------------------------------- prep_indirect.wesl (1) ---------->  active ray counter (indirect format), active ray counter (next reset)
 
-        data, ray buffer dense [# active], scene  >------------------------------------------------------------ extend.wesl (# active) ---------->  intersection buffer [# active]
+        vars, ray buffer dense [# active], scene  >------------------------------------------------------------ extend.wesl (# active) ---------->  intersection buffer [# active]
 
-        data, ray buffer dense [# active], active ray counter, intersection buffer [# active], materials  >---- shade.wesl (# active) ----------->  ray buffer sparse [# active], active rays buffer [# active], output buffer
+        vars, ray buffer dense [# active], active ray counter, intersection buffer [# active], materials  >---- shade.wesl (# active) ----------->  ray buffer sparse [# active], active rays buffer [# active], output buffer
         // split into substeps?
 
-        data, ray buffer sparse [# active], active rays buffer [# active]  >----------------------------------- compact.wesl (# active) --------->  ray buffer dense [# next active]
+        vars, ray buffer sparse [# active], active rays buffer [# active]  >----------------------------------- compact.wesl (# active) --------->  ray buffer dense [# next active]
         // split into count active, compute offsets, scatter into compacted?
         // not compact every bounce?
     }
 
-    data, output buffer  >------------------------------------------------------------------------------------- blit.wesl ----------------------->  output image
+    vars, output buffer  >------------------------------------------------------------------------------------- blit.wesl ----------------------->  output image
 
 }
 
