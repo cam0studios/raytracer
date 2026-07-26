@@ -9,7 +9,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::pipeline::Pipeline;
+use crate::pipeline::{Pipeline, Size};
 
 pub struct Context {
     pub surface: wgpu::Surface<'static>,
@@ -94,15 +94,23 @@ impl State {
         })
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        if width > 0 && height > 0 {
+    pub fn resize(&mut self, size: Size) {
+        if size.0 > 0 && size.1 > 0 {
             let max = 2048;
-            self.context.config.width = width.min(max);
-            self.context.config.height = height.min(max);
+            self.context.config.width = size.0.min(max);
+            self.context.config.height = size.1.min(max);
             self.context
                 .surface
                 .configure(&self.context.device, &self.context.config);
-            self.context.is_surface_configured = true;
+
+            if !self.context.is_surface_configured {
+                println!("setup");
+                self.window.set_visible(true);
+                self.context.is_surface_configured = true;
+            }
+
+            self.pipeline
+                .resize(size, &self.context.device, &self.context.queue);
         }
     }
 
@@ -139,7 +147,8 @@ impl ApplicationHandler for WindowManager {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
             .with_title("Raytracer")
-            .with_visible(true);
+            .with_visible(true) // TODO: hidden while launching
+            .with_max_inner_size(winit::dpi::LogicalSize::new(2048, 2048));
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         self.state = Some(pollster::block_on(State::new(window)).unwrap());
@@ -158,7 +167,7 @@ impl ApplicationHandler for WindowManager {
                 log::info!("Window closed");
             }
             WindowEvent::Resized(size) => {
-                state.resize(size.width, size.height);
+                state.resize(Size(size.width, size.height));
             }
             WindowEvent::RedrawRequested => match state.render() {
                 Ok(_) => {}

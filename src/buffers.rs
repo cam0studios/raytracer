@@ -2,6 +2,8 @@
 
 use wgpu::util::DeviceExt;
 
+use crate::pipeline::Size;
+
 pub struct BufferManager {
     // static size
     pub vars: Vars, // Vars
@@ -23,7 +25,7 @@ pub struct BufferManager {
 }
 impl BufferManager {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
-        let size = (config.width, config.height);
+        let size = Size(config.width, config.height);
 
         let vars = Vars {
             size,
@@ -43,7 +45,7 @@ impl BufferManager {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::INDIRECT,
         });
 
-        let size_dependent = Self::get_size_dependent_buffers(device, &size);
+        let size_dependent = Self::get_size_dependent_buffers(device, size);
 
         Self {
             vars,
@@ -59,10 +61,7 @@ impl BufferManager {
 
     // fn get_scene_dependent_buffers() -> SceneDependentBuffers {}
 
-    fn get_size_dependent_buffers(
-        device: &wgpu::Device,
-        size: &(u32, u32),
-    ) -> SizeDependentBuffers {
+    fn get_size_dependent_buffers(device: &wgpu::Device, size: Size) -> SizeDependentBuffers {
         let rays_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Rays Buffer"),
             size: (4 * 12 * size.0 * size.1) as u64,
@@ -115,7 +114,7 @@ impl BufferManager {
 
     // pub fn write_scene(&mut self, device: &wgpu::Device) {}
 
-    pub fn resize(&mut self, device: &wgpu::Device, size: &(u32, u32)) {
+    pub fn resize(&mut self, device: &wgpu::Device, size: Size) {
         let size_dependent = BufferManager::get_size_dependent_buffers(device, size);
         self.rays_buffer = size_dependent.rays_buffer;
         self.active_rays_buffer = size_dependent.active_rays_buffer;
@@ -135,7 +134,7 @@ struct SizeDependentBuffers {
 }
 
 pub struct Vars {
-    pub size: (u32, u32),
+    pub size: Size,
     pub frame: u32,
     pub bounce: u32,
 }

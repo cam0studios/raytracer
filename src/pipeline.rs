@@ -1,6 +1,5 @@
 // wgpu compiling and encoding
 
-use glam::Vec2;
 use wesl::{StandardResolver, Wesl};
 
 use crate::{buffers::BufferManager, window::Context};
@@ -8,20 +7,11 @@ use crate::{buffers::BufferManager, window::Context};
 const CONSTS: Consts = Consts { bounces: 1 };
 
 pub struct Pipeline {
-    pub generate_pipeline: wgpu::ComputePipeline,
-    pub generate_bind_group: wgpu::BindGroup,
-    // pub prep_indirect_pipeline: wgpu::ComputePipeline,
-    // pub prep_indirect_bind_group: wgpu::BindGroup,
-    // pub extend_pipeline: wgpu::ComputePipeline,
-    // pub extend_bind_group: wgpu::BindGroup,
-    // pub shade_pipeline: wgpu::ComputePipeline,
-    // pub shade_bind_group: wgpu::BindGroup,
-    // pub compact_pipeline: wgpu::ComputePipeline,
-    // pub compact_bind_group: wgpu::BindGroup,
-    pub blit_pipeline: wgpu::RenderPipeline,
-    pub blit_bind_group: wgpu::BindGroup,
     pub buffers: BufferManager,
-    pub size: Vec2,
+    pub size: Size,
+    pub pipelines: Pipelines,
+    pub bind_group_layouts: BindGroupLayouts,
+    pub bind_groups: BindGroups,
 }
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
@@ -42,21 +32,6 @@ impl Pipeline {
             entry_point: Some("main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
-        });
-        let generate_bind_group_layout = generate_pipeline.get_bind_group_layout(0);
-        let generate_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Generate Bind Group"),
-            layout: &generate_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.vars_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
-                },
-            ],
         });
 
         // let prep_indirect_shader_string = Self::get_shader_string(&compiler, "prep_indirect");
@@ -107,32 +82,25 @@ impl Pipeline {
             cache: None,
             multiview_mask: None,
         });
-        let blit_bind_group_layout = blit_pipeline.get_bind_group_layout(0);
-        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Blit Bind Group"),
-            layout: &blit_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.vars_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
-                },
-            ],
-        });
+
+        let pipelines = Pipelines {
+            generate: generate_pipeline,
+            blit: blit_pipeline,
+        };
+
+        let bind_group_layouts = BindGroupLayouts {
+            generate: pipelines.generate.get_bind_group_layout(0),
+            blit: pipelines.blit.get_bind_group_layout(0),
+        };
+
+        let bind_groups = Self::get_bind_groups(&bind_group_layouts, device, &buffers);
 
         Self {
-            generate_pipeline,
-            generate_bind_group,
-            blit_pipeline,
-            blit_bind_group,
             buffers,
-            size: Vec2 {
-                x: config.width as f32,
-                y: config.height as f32,
-            },
+            size: Size(config.width, config.height),
+            pipelines,
+            bind_group_layouts,
+            bind_groups,
         }
     }
 
@@ -180,11 +148,11 @@ impl Pipeline {
                 label: Some("Generate Pass"),
                 timestamp_writes: None,
             });
-            generate_pass.set_pipeline(&self.generate_pipeline);
-            generate_pass.set_bind_group(0, &self.generate_bind_group, &[]);
+            generate_pass.set_pipeline(&self.pipelines.generate);
+            generate_pass.set_bind_group(0, &self.bind_groups.generate, &[]);
             generate_pass.dispatch_workgroups(
-                (self.size.x / 8.0).ceil() as u32,
-                (self.size.y / 8.0).ceil() as u32,
+                (self.size.f().0 / 8.0).ceil() as u32,
+                (self.size.f().1 / 8.0).ceil() as u32,
                 1,
             );
         }
@@ -223,8 +191,8 @@ impl Pipeline {
                 timestamp_writes: None,
                 multiview_mask: None,
             });
-            blit_pass.set_pipeline(&self.blit_pipeline);
-            blit_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+            blit_pass.set_pipeline(&self.pipelines.blit);
+            blit_pass.set_bind_group(0, &self.bind_groups.blit, &[]);
             blit_pass.draw(0..3, 0..1);
         }
 
@@ -233,10 +201,84 @@ impl Pipeline {
 
         Ok(())
     }
+
+    pub fn resize(&mut self, size: Size, device: &wgpu::Device, queue: &wgpu::Queue) {
+        self.size = size;
+        self.buffers.resize(&device, self.size);
+        self.buffers.vars.size = size;
+        self.buffers.write_vars(device, queue);
+        self.bind_groups = Self::get_bind_groups(&self.bind_group_layouts, &device, &self.buffers);
+    }
+
+    pub fn get_bind_groups(
+        layouts: &BindGroupLayouts,
+        device: &wgpu::Device,
+        buffers: &BufferManager,
+    ) -> BindGroups {
+        let generate = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Generate Bind Group"),
+            layout: &layouts.generate,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
+                },
+            ],
+        });
+
+        let blit = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &layouts.blit,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.vars_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&buffers.output_view),
+                },
+            ],
+        });
+        BindGroups { generate, blit }
+    }
 }
 
 pub struct Consts {
     bounces: u32,
+}
+
+#[derive(Debug)]
+pub struct Size(pub u32, pub u32);
+impl Size {
+    pub fn f(&self) -> (f32, f32) {
+        (self.0 as f32, self.1 as f32)
+    }
+}
+impl Clone for Size {
+    fn clone(&self) -> Self {
+        Self(self.0, self.1)
+    }
+}
+impl Copy for Size {}
+
+pub struct Pipelines {
+    generate: wgpu::ComputePipeline,
+    blit: wgpu::RenderPipeline,
+}
+pub struct BindGroups {
+    generate: wgpu::BindGroup,
+    // others
+    blit: wgpu::BindGroup,
+}
+pub struct BindGroupLayouts {
+    generate: wgpu::BindGroupLayout,
+    // other
+    blit: wgpu::BindGroupLayout,
 }
 
 /*
