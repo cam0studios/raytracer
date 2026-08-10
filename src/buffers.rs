@@ -79,7 +79,8 @@ impl BufferManager {
 
         let active_rays_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Active Rays Buffer"),
-            size: (size.0 * size.1 + 31) as u64 / 32,
+            // size: (size.0 * size.1 + 31) as u64 / 4,
+            size: (size.0 * size.1 * 4) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });

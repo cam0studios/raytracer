@@ -48,12 +48,15 @@ impl State {
             })
             .await?;
 
+        let mut limits = wgpu::Limits::default();
+        limits.max_storage_buffer_binding_size = 2u64.pow(28);
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
                 required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                required_limits: wgpu::Limits::default(),
+                required_limits: limits,
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             })

@@ -20,9 +20,10 @@ NOTES:
   - render pass to draw storage buffer to surface
 
 TO DO LATER:
+  - BRDFs
   - Russian roulette in lambertian/dielectric
   - Shadow rays
-  - Spectral instead of RGB
+  - Spectral instead of RGB (each ray has random wavelength instead of rgb)
   - Shader hot reloading
   - OIDN denoising
 
