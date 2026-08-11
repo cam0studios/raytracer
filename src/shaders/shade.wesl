@@ -16,6 +16,7 @@ var<storage, read> active_ray_indirect: Indirect;
 var<storage, read> intersections: array<Intersection>;
 @group(0) @binding(6)
 var output: texture_storage_2d<rgba32float, read_write>;
+// materials
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
@@ -30,12 +31,26 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     let coord = vec2u(u32(ray.pixel_x), u32(ray.pixel_y));
     let intersection = intersections[id];
 
-    if intersection.material_i < 0 {
+    if intersection.material < 0 {
         // sky shading
-        textureStore(output, coord, vec4f(0.0, 0.0, 0.0, 1.0));
+        out(coord, vec3f(0.0, 0.0, 0.0));
+        return;
     }
 
-    textureStore(output, coord, vec4f(intersection.normal.x, intersection.normal.y, intersection.normal.z, 1.0));
+    let dot = -dot(ray.direction, intersection.normal);
+    var col = vec3f(0.0, 0.0, 1.0);
+
+    if (vars.frame / 60) % 2 == 1 {
+        col.x = 1;
+    }
+
+    col *= dot;
+
+    out(coord, col);
 
     atomicAdd(&active_ray_counter, 1);
+}
+
+fn out(coord: vec2u, col: vec3f) {
+    textureStore(output, coord, textureLoad(output, coord) + vec4f(col, 1.0));
 }

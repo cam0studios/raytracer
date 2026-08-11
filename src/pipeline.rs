@@ -186,6 +186,9 @@ impl Pipeline {
 
         // START
 
+        self.buffers.vars.bounce = 0;
+        self.buffers.write_vars(&context.device, &context.queue);
+
         // GENERATE PASS
         {
             let mut generate_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -236,7 +239,13 @@ impl Pipeline {
             }
             // COMPACT PASS
             // {}
+            self.buffers.vars.bounce += 1;
+            self.buffers.write_vars(&context.device, &context.queue);
         }
+
+        self.buffers.vars.frame += 1;
+        self.buffers.write_vars(&context.device, &context.queue);
+
         // BLIT PASS
         {
             let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -268,6 +277,8 @@ impl Pipeline {
         context.queue.submit(std::iter::once(encoder.finish()));
         context.queue.present(output);
 
+        log::info!("frame {}", self.buffers.vars.frame);
+
         Ok(())
     }
 
@@ -275,6 +286,7 @@ impl Pipeline {
         self.size = size;
         self.buffers.resize(&device, self.size);
         self.buffers.vars.size = size;
+        self.buffers.vars.frame = 0;
         self.buffers.write_vars(device, queue);
         self.bind_groups = Self::get_bind_groups(&self.bind_group_layouts, &device, &self.buffers);
     }

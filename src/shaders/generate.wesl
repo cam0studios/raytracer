@@ -15,9 +15,9 @@ var<storage, read_write> active_rays: array<u32>;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
+    let usize = vars.size;
+    let isize = vec2i(vars.size);
     let fsize = vec2f(vars.size);
-    let isize = vec2i(fsize);
-    let usize = vec2u(isize);
     // let ray = Ray();
     let coords = vec2i(idv.xy);
     let id: u32 = idv.x + idv.y * usize.x;

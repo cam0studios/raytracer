@@ -49,7 +49,7 @@ impl State {
             .await?;
 
         let mut limits = wgpu::Limits::default();
-        limits.max_storage_buffer_binding_size = 2u64.pow(28);
+        limits.max_storage_buffer_binding_size = 2u64.pow(29);
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -99,9 +99,8 @@ impl State {
 
     pub fn resize(&mut self, size: Size) {
         if size.0 > 0 && size.1 > 0 {
-            let max = 2048;
-            self.context.config.width = size.0.min(max);
-            self.context.config.height = size.1.min(max);
+            self.context.config.width = size.0;
+            self.context.config.height = size.1;
             self.context
                 .surface
                 .configure(&self.context.device, &self.context.config);
@@ -150,8 +149,7 @@ impl ApplicationHandler for WindowManager {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
             .with_title("Raytracer")
-            .with_visible(true) // TODO: hidden while launching
-            .with_max_inner_size(winit::dpi::LogicalSize::new(2048, 2048));
+            .with_visible(true); // TODO: hidden while launching?
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         self.state = Some(pollster::block_on(State::new(window)).unwrap());

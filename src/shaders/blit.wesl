@@ -8,12 +8,14 @@ var<uniform> vars: Vars;
 var output: texture_storage_2d<rgba32float, read>;
 
 struct VertexOutput {
-    @builtin(position) position: vec4f,
-    @location(0) uv: vec2f}
+    @builtin(position)
+    position: vec4f,
+    @location(0)
+    uv: vec2f}
 
 @vertex
 fn vs_main(
-    @builtin(vertex_index) vertex_index: u32
+    @builtin(vertex_index)vertex_index: u32
 ) -> VertexOutput {
     var out: VertexOutput;
 
@@ -28,6 +30,6 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let size = vec2f(vars.size);
-    return textureLoad(output, vec2i(in.position.xy));
+    let inv_frame = 1 / f32(vars.frame);
+    return vec4f(textureLoad(output, vec2i(in.position.xy)).xyz * inv_frame, 1.0);
 }

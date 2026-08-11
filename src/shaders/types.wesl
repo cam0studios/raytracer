@@ -41,7 +41,10 @@ struct Intersection {
     normal: vec3f,
     dist: f32,
     _skip: vec3f,
-    material_i: i32,
+    material: i32,
+}
+fn intersection_none() -> Intersection {
+    return Intersection(vec3f(0.0, 0.0, 0.0), -1.0, vec3f(0.0, 0.0, 0.0), -1);
 }
 
 struct Indirect {
