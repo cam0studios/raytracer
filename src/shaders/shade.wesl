@@ -27,16 +27,32 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
         return;
     }
 
-    let ray = rays[id];
-    let coord = vec2u(u32(ray.pixel_x), u32(ray.pixel_y));
+    var ray = rays[id];
     let intersection = intersections[id];
 
     if intersection.material < 0 {
-        // sky shading
-        out(coord, vec3f(0.0, 0.0, 0.0));
-        return;
+        calc_termination(id, sky_shade(&ray, intersection));
+    } else if intersection.material == 0 {
+        calc_termination(id, lambertian_shade(&ray, intersection));
     }
 
+    rays[id] = ray;
+}
+
+// materials
+
+fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection) -> bool {
+    var col = vec3f(0.05, 0.05, 0.05);
+
+    if ray.direction.y < 0 {
+        col = vec3f(0.5, 0.5, 0.5);
+    }
+
+    out(*ray, col);
+    return true;
+}
+
+fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection) -> bool {
     let dot = -dot(ray.direction, intersection.normal);
     var col = vec3f(0.0, 0.0, 1.0);
 
@@ -45,12 +61,25 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     }
 
     col *= dot;
+    ray.throughput *= col;
 
-    out(coord, col);
+    ray.origin = vec3f(100.0, 0.0, 0.0);
+    ray.direction = normalize(vec3f(0.0, -1.0, 1.0));
 
-    atomicAdd(&active_ray_counter, 1);
+    return false;
 }
 
-fn out(coord: vec2u, col: vec3f) {
-    textureStore(output, coord, textureLoad(output, coord) + vec4f(col, 1.0));
+// utils
+
+fn out(ray: Ray, col: vec3f) {
+    let coord = vec2u(u32(ray.pixel_x), u32(ray.pixel_y));
+    textureStore(output, coord, textureLoad(output, coord) + vec4f(col * ray.throughput, 1.0));
+}
+fn calc_termination(id: u32, terminate: bool) {
+    if terminate {
+        active_rays[id] = 0u;
+        atomicAdd(&active_ray_counter, 1); // temp while compaction doesn't exist
+    } else {
+        atomicAdd(&active_ray_counter, 1); // todo: speed up
+    }
 }
