@@ -33,7 +33,7 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
 
     let ray = rays[id];
 
-    let obj = Object(vec3f(0.0, 0.0, 10.0), 0.0, 0.0, vec3f(0.0, 0.0, 0.0), mat2x4f(2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    let obj = Object(vec3f(0.0, 0.5, 10.0), 0.0, 0.0, vec3f(0.0, 0.0, 0.0), mat2x4f(2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
     intersections[id] = sphere_intersect(ray, obj);
 
     // intersections[id] = intersection_none();

@@ -34,7 +34,7 @@ struct Ray {
     origin: vec3f,
     pixel_y: i32,
     direction: vec3f,
-    _skip: f32,
+    rng_state: u32,
 }
 
 struct Intersection {

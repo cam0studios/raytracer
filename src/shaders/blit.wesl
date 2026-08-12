@@ -31,5 +31,9 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let inv_frame = 1 / f32(vars.frame);
-    return vec4f(textureLoad(output, vec2i(in.position.xy)).xyz * inv_frame, 1.0);
+    var col = textureLoad(output, vec2i(in.position.xy)).xyz * inv_frame;
+
+    col = pow(col, vec3f(2.2));
+
+    return vec4f(col, 1.0);
 }

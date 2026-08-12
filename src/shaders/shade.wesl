@@ -1,6 +1,7 @@
 // accumulate shaded values, calculate ray termination and bounces
 
 import super::types::{Vars, Ray, Indirect, Intersection};
+import super::sampling::{pcg, sample_hemisphere_cosine, lerp_3f};
 
 @group(0) @binding(0)
 var<uniform> vars: Vars;
@@ -26,45 +27,55 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     if id >= u32(active_ray_indirect.count) || active_rays[id] != 1u {
         return;
     }
-
     var ray = rays[id];
     let intersection = intersections[id];
 
+    var rng_state = ray.rng_state;
+
     if intersection.material < 0 {
-        calc_termination(id, sky_shade(&ray, intersection));
+        calc_termination(id, sky_shade(&ray, intersection, &rng_state));
     } else if intersection.material == 0 {
-        calc_termination(id, lambertian_shade(&ray, intersection));
+        calc_termination(id, lambertian_shade(&ray, intersection, &rng_state));
     }
 
+    ray.rng_state = rng_state;
     rays[id] = ray;
 }
 
 // materials
 
-fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection) -> bool {
-    var col = vec3f(0.05, 0.05, 0.05);
+fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> bool {
+    var col = vec3f(0.0, 0.0, 0.0);
 
-    if ray.direction.y < 0 {
-        col = vec3f(0.5, 0.5, 0.5);
+    if ray.direction.y >= 0 {
+        col = vec3f(0.3, 0.3, 0.3);
+    } else {
+        let sun_dot = dot(ray.direction, normalize(vec3f(1.0, -1.0, 0.0)));
+
+        if sun_dot > 0.95 {
+            col = vec3f(8, 8, 7.8);
+        }
+
+        col += lerp_3f(vec3f(0.3, 0.4, 0.6), vec3f(0.0, 0.3, 0.5), -ray.direction.y);
     }
 
     out(*ray, col);
     return true;
 }
 
-fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection) -> bool {
-    let dot = -dot(ray.direction, intersection.normal);
-    var col = vec3f(0.0, 0.0, 1.0);
+fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> bool {
+    var col = vec3f(1.0, 1.0, 1.0);
 
-    if (vars.frame / 60) % 2 == 1 {
-        col.x = 1;
-    }
+    // let dot = -dot(ray.direction, intersection.normal);
+    // col *= dot;
 
-    col *= dot;
     ray.throughput *= col;
 
-    ray.origin = vec3f(100.0, 0.0, 0.0);
-    ray.direction = normalize(vec3f(0.0, -1.0, 1.0));
+    ray.origin += ray.direction * intersection.dist;
+    ray.direction = sample_hemisphere_cosine(rng_state, intersection.normal);
+    // ray.direction = reflect(ray.direction, intersection.normal);
+
+    ray.origin += ray.direction * 1e-1; // todo: replace with threshold and data stored for next frame
 
     return false;
 }
@@ -72,8 +83,13 @@ fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection) -> bool
 // utils
 
 fn out(ray: Ray, col: vec3f) {
+    let out_col = col * ray.throughput;
+    if col.x != col.x || col.y != col.y || col.z != col.z {
+        return;
+    }
+
     let coord = vec2u(u32(ray.pixel_x), u32(ray.pixel_y));
-    textureStore(output, coord, textureLoad(output, coord) + vec4f(col * ray.throughput, 1.0));
+    textureStore(output, coord, textureLoad(output, coord) + vec4f(out_col, 1.0));
 }
 fn calc_termination(id: u32, terminate: bool) {
     if terminate {
