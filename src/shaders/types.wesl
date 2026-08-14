@@ -53,3 +53,11 @@ struct Indirect {
     dim_z: i32,
     count: i32,
 }
+
+struct Object {
+    origin: vec3f,
+    kind: f32,
+    datav: vec3f,
+    material: f32,
+    datam: mat2x4f,
+}

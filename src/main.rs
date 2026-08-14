@@ -20,15 +20,17 @@ NOTES:
   - render pass to draw storage buffer to surface
 
 TO FIX:
+  - horizontal brightness line in render
   - max size of 2^22 px
 
 TO DO LATER:
   - BRDFs + importance sampling
-  - Russian roulette in materials
-  - Constant number of rays that regenerate when terminated, no fixed frame borders
-  - Shadow rays
-  - Spectral instead of RGB (each ray has random wavelength instead of rgb)
-  - Shader hot reloading?
+  - russian roulette in materials
+  - shadow rays
+  - spectral instead of RGB (each ray has random wavelength instead of rgb)
+  - array of structs vs struct of arrays?
+  - constant number of rays that regenerate when terminated, no fixed frame borders?
+  - shader hot reloading?
   - OIDN denoising?
 
 */

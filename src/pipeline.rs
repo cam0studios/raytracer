@@ -1,10 +1,11 @@
 // wgpu compiling and encoding
 
+use glam::Vec3;
 use wesl::{StandardResolver, Wesl};
 
-use crate::{buffers::BufferManager, window::Context};
+use crate::{buffers::BufferManager, scene, window::Context};
 
-const CONSTS: Consts = Consts { bounces: 2 };
+const CONSTS: Consts = Consts { bounces: 10 };
 
 pub struct Pipeline {
     pub buffers: BufferManager,
@@ -15,7 +16,31 @@ pub struct Pipeline {
 }
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
-        let buffers = BufferManager::new(device, config);
+        // todo: better location for scene
+        let buffers = BufferManager::new(
+            device,
+            config,
+            &scene::Scene {
+                objects: vec![
+                    scene::Primitive::Sphere(scene::Sphere {
+                        center: Vec3::new(0.0, 1.1, 10.0),
+                        radius: 1.2,
+                    }),
+                    scene::Primitive::Sphere(scene::Sphere {
+                        center: Vec3::new(0.0, -0.2, 10.0),
+                        radius: 0.9,
+                    }),
+                    scene::Primitive::Sphere(scene::Sphere {
+                        center: Vec3::new(0.0, -1.3, 10.0),
+                        radius: 0.7,
+                    }),
+                    scene::Primitive::Sphere(scene::Sphere {
+                        center: Vec3::new(0.0, 101.5, 10.0),
+                        radius: 100.0,
+                    }),
+                ],
+            },
+        );
 
         let compiler = Wesl::new("src/shaders");
 
@@ -384,7 +409,11 @@ impl Pipeline {
                     binding: 4,
                     resource: buffers.intersections_buffer.as_entire_binding(),
                 },
-                // scene
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: buffers.objects_buffer.as_entire_binding(),
+                },
+                // bvh, materials
             ],
         });
 

@@ -2,7 +2,7 @@
 
 use wgpu::util::DeviceExt;
 
-use crate::pipeline::Size;
+use crate::{pipeline::Size, scene::Scene};
 
 pub struct BufferManager {
     // static size
@@ -11,12 +11,9 @@ pub struct BufferManager {
     pub active_ray_counter: wgpu::Buffer,  // atomic
     pub active_ray_indirect: wgpu::Buffer, // Indirect
     // scene dependent
-    // pub bvh: Vec<f32>, // Bvh[# node]
-    // pub bvh_buffer: wgpu::Buffer,
-    // pub scene: Vec<f32>, // Object[# object]
-    // pub scene_buffer: wgpu::Buffer,
-    // pub materials: Vec<f32>, // Material[# material]
-    // pub materials_buffer: wgpu::Buffer,
+    // pub bvh_buffer: wgpu::Buffer, // Bvh[# node]
+    pub objects_buffer: wgpu::Buffer, // Object[# object]
+    // pub materials_buffer: wgpu::Buffer, // Material[# material]
     // size dependent
     pub rays_buffer: wgpu::Buffer,          // Ray[# active]
     pub active_rays_buffer: wgpu::Buffer,   // u32[# active / 32] (packed bits)
@@ -25,7 +22,7 @@ pub struct BufferManager {
     pub output_view: wgpu::TextureView,
 }
 impl BufferManager {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, scene: &Scene) -> Self {
         let size = Size(config.width, config.height);
 
         let vars = Vars {
@@ -52,6 +49,8 @@ impl BufferManager {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::INDIRECT,
         });
 
+        let scene_dependent = Self::get_scene_dependent_buffers(device, scene);
+
         let size_dependent = Self::get_size_dependent_buffers(device, size);
 
         Self {
@@ -59,6 +58,9 @@ impl BufferManager {
             vars_buffer,
             active_ray_counter,
             active_ray_indirect,
+
+            objects_buffer: scene_dependent.objects_buffer,
+
             rays_buffer: size_dependent.rays_buffer,
             active_rays_buffer: size_dependent.active_rays_buffer,
             intersections_buffer: size_dependent.intersections_buffer,
@@ -67,7 +69,28 @@ impl BufferManager {
         }
     }
 
-    // fn get_scene_dependent_buffers() -> SceneDependentBuffers {}
+    fn get_scene_dependent_buffers(device: &wgpu::Device, scene: &Scene) -> SceneDependentBuffers {
+        let mut objects_raw: std::vec::Vec<f32> = vec![];
+
+        for object in &scene.objects {
+            objects_raw.extend(object.to_raw());
+        }
+
+        // minimum buffer binding size
+        while objects_raw.len() < 20 {
+            objects_raw.extend(vec![-1.0; 16]);
+        }
+
+        let objects_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Objects Buffer"),
+            usage: wgpu::BufferUsages::STORAGE,
+            contents: bytemuck::cast_slice(objects_raw.as_slice()),
+        });
+
+        // bvh, materials
+
+        SceneDependentBuffers { objects_buffer }
+    }
 
     fn get_size_dependent_buffers(device: &wgpu::Device, size: Size) -> SizeDependentBuffers {
         let rays_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -121,7 +144,10 @@ impl BufferManager {
         queue.write_buffer(&self.vars_buffer, 0, &self.vars.to_bytes());
     }
 
-    // pub fn write_scene(&mut self, device: &wgpu::Device) {}
+    pub fn write_scene(&mut self, device: &wgpu::Device, scene: &Scene) {
+        let scene_dependent = BufferManager::get_scene_dependent_buffers(device, scene);
+        self.objects_buffer = scene_dependent.objects_buffer;
+    }
 
     pub fn resize(&mut self, device: &wgpu::Device, size: Size) {
         let size_dependent = BufferManager::get_size_dependent_buffers(device, size);
@@ -133,7 +159,10 @@ impl BufferManager {
     }
 }
 
-// struct SceneDependentBuffers {}
+struct SceneDependentBuffers {
+    objects_buffer: wgpu::Buffer,
+}
+
 struct SizeDependentBuffers {
     rays_buffer: wgpu::Buffer,
     active_rays_buffer: wgpu::Buffer,

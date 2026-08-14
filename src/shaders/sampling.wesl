@@ -11,11 +11,10 @@ fn hash(x: u32) -> u32 {
 }
 fn ray_seed(pixel_x: u32, pixel_y: u32, frame: u32, sample_idx: u32) -> u32 {
     var h = 0u;
-    h ^= pixel_x * 0x8da6b343u;
-    h ^= pixel_y * 0xd8163841u;
-    h ^= frame * 0xcb1ab31fu;
-    h ^= sample_idx * 0x9e3779b9u;
-    h = hash(h);
+    h ^= hash(pixel_x ^ (pixel_y * 0x9e3779b9u));
+    h ^= hash(frame * 0x85ebca6bu);
+    h ^= hash(sample_idx * 0xc2b2ae3du);
+    h ^= hash(h + 0x27d4eb2du);
     return select(h, 1u, h == 0u);
 }
 
@@ -63,5 +62,5 @@ fn sample_hemisphere_cosine(state: ptr<function, u32>, normal: vec3f) -> vec3f {
 }
 
 fn lerp_3f(a: vec3f, b: vec3f, t: f32) -> vec3f {
-    return a * (1 - t) + (b - a) * t;
+    return a * (1 - t) + b * t;
 }

@@ -3,6 +3,7 @@
 use glam::Vec3;
 
 // Primitives
+// todo: make primitive a trait?
 
 #[derive(Debug)]
 pub struct Triangle {
@@ -35,6 +36,10 @@ impl Triangle {
             self.v2.to_string()
         )
     }
+    pub fn to_raw(&self) -> std::vec::Vec<f32> {
+        // todo
+        vec![]
+    }
 }
 impl Clone for Triangle {
     fn clone(&self) -> Self {
@@ -47,24 +52,82 @@ impl Clone for Triangle {
 }
 
 #[derive(Debug)]
+pub struct Sphere {
+    pub center: Vec3,
+    pub radius: f32,
+}
+impl Sphere {
+    pub fn new() -> Self {
+        Self {
+            center: Vec3::default(),
+            radius: 1.0,
+        }
+    }
+    pub fn get_center(&self) -> Vec3 {
+        self.center
+    }
+    pub fn get_aabb(&self) -> Aabb {
+        Aabb::from_dims(
+            self.center - Vec3::new(self.radius, self.radius, self.radius),
+            Vec3::new(self.radius * 2.0, self.radius * 2.0, self.radius * 2.0),
+        )
+    }
+    pub fn to_primitive(self) -> Primitive {
+        Primitive::Sphere(self)
+    }
+    pub fn to_string(&self) -> String {
+        format!(
+            "Sphere center {} radius {}",
+            self.center.to_string(),
+            self.radius.to_string()
+        )
+    }
+    pub fn to_raw(&self) -> std::vec::Vec<f32> {
+        let mut res = vec![];
+        res.extend(vec![self.center.x, self.center.y, self.center.z, 1.0]);
+        res.extend(vec![self.radius, 0.0, 0.0, 0.0]);
+        res.extend(vec![0.0; 8]);
+        res
+    }
+}
+impl Clone for Sphere {
+    fn clone(&self) -> Self {
+        Self {
+            center: self.center.clone(),
+            radius: self.radius.clone(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum Primitive {
     Triangle(Triangle),
+    Sphere(Sphere),
 }
 // todo: trait?
 impl Primitive {
     pub fn get_center(&self) -> Vec3 {
         match self {
             Self::Triangle(triangle) => triangle.get_center(),
+            Self::Sphere(sphere) => sphere.get_center(),
         }
     }
     pub fn get_aabb(&self) -> Aabb {
         match self {
             Self::Triangle(triangle) => triangle.get_aabb(),
+            Self::Sphere(sphere) => sphere.get_aabb(),
         }
     }
     pub fn to_string(&self) -> String {
         match self {
             Self::Triangle(triangle) => triangle.to_string(),
+            Self::Sphere(sphere) => sphere.to_string(),
+        }
+    }
+    pub fn to_raw(&self) -> std::vec::Vec<f32> {
+        match self {
+            Self::Triangle(triangle) => triangle.to_raw(),
+            Self::Sphere(sphere) => sphere.to_raw(),
         }
     }
 }
@@ -72,6 +135,7 @@ impl Clone for Primitive {
     fn clone(&self) -> Self {
         match self {
             Self::Triangle(triangle) => triangle.clone().to_primitive(),
+            Self::Sphere(sphere) => sphere.clone().to_primitive(),
         }
     }
 }
@@ -93,7 +157,7 @@ impl Aabb {
             size: MARGIN_V * 2.0,
         }
     }
-    pub fn from_dims(pos: &Vec3, size: &Vec3) -> Self {
+    pub fn from_dims(pos: Vec3, size: Vec3) -> Self {
         Self {
             pos: pos - MARGIN_V,
             size: size + MARGIN_V * 2.0,
@@ -110,7 +174,7 @@ impl Aabb {
             min = min.min(*point);
             max = max.max(*point);
         }
-        Self::from_dims(&min, &(max - min))
+        Self::from_dims(min, max - min)
     }
     pub fn from_aabbs(aabbs: &Vec<Aabb>) -> Self {
         let first = match aabbs.first() {
@@ -284,9 +348,13 @@ pub fn test() {
     println!("{}", bvh.to_string());
 }
 
-/*
-
-bvh:  box aabb, left bvh, right bvh, primitives
-aabb: pos vec3, size vec3
-
-*/
+pub struct Scene {
+    pub objects: std::vec::Vec<Primitive>,
+    // pub bvh
+    // pub materials
+}
+impl Scene {
+    pub fn new() -> Self {
+        Self { objects: vec![] }
+    }
+}
