@@ -5,7 +5,7 @@ use wesl::{StandardResolver, Wesl};
 
 use crate::{
     buffers::BufferManager,
-    scene::{Lambertian, Scene, Sphere},
+    scene::{Bvh, Lambertian, Primitive, Scene, Sphere},
     window::Context,
 };
 
@@ -21,32 +21,34 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         // todo: better location for scene
+        let objects: Vec<Box<dyn Primitive>> = vec![
+            Box::new(Sphere {
+                center: Vec3::new(0.0, 1.1, 10.0),
+                radius: 1.2,
+                material: 0,
+            }),
+            Box::new(Sphere {
+                center: Vec3::new(0.0, -0.2, 10.0),
+                radius: 0.9,
+                material: 0,
+            }),
+            Box::new(Sphere {
+                center: Vec3::new(0.0, -1.3, 10.0),
+                radius: 0.7,
+                material: 0,
+            }),
+            Box::new(Sphere {
+                center: Vec3::new(0.0, 101.5, 10.0),
+                radius: 100.0,
+                material: 1,
+            }),
+        ];
         let buffers = BufferManager::new(
             device,
             config,
             &Scene {
-                objects: vec![
-                    Box::new(Sphere {
-                        center: Vec3::new(0.0, 1.1, 10.0),
-                        radius: 1.2,
-                        material: 0,
-                    }),
-                    Box::new(Sphere {
-                        center: Vec3::new(0.0, -0.2, 10.0),
-                        radius: 0.9,
-                        material: 0,
-                    }),
-                    Box::new(Sphere {
-                        center: Vec3::new(0.0, -1.3, 10.0),
-                        radius: 0.7,
-                        material: 0,
-                    }),
-                    Box::new(Sphere {
-                        center: Vec3::new(0.0, 101.5, 10.0),
-                        radius: 100.0,
-                        material: 1,
-                    }),
-                ],
+                bvh: Bvh::from_primitives(&objects),
+                objects,
                 materials: vec![
                     Box::new(Lambertian {
                         color: Vec3::new(1.0, 1.0, 1.0),

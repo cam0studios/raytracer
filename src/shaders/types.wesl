@@ -2,11 +2,10 @@
 
 /*
 
-bvh:       box aabbi, left? bvhi, right? bvhi, object? obji
-aabb:      pos vec3f, size vec3f
-ray:       throughput vec3f, pixelx i32, origin vec3f, pixely i32, direction vec3f
+bvh:       pos vec3f, left? bvhi, size vec3f, right? bvhi, object? obji
+ray:       throughput vec3f, pixelx i32, origin vec3f, pixely i32, direction vec3f, rng state u32
 intersect: dist f32, normal vec3f, material materieli
-indirect:  count atomic(i32), _ atomic(i32), _ atomic(i32), next count atomic(i32)
+indirect:  dimx i32, dimy i32, dimz i32, count i32
 
 */
 
@@ -16,16 +15,13 @@ struct Vars {
     bounce: u32,
 }
 
-struct Aabb {
-    pos: vec3f,
-    size: vec3f,
-}
-
 struct Bvh {
-    aabb_i: i32,
-    left_i: i32,
-    right_i: i32,
-    object: i32,
+    pos: vec3f,
+    left: f32,
+    size: vec3f,
+    right: f32,
+    object: f32,
+    skip: vec3f,
 }
 
 struct Ray {

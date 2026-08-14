@@ -11,7 +11,7 @@ pub struct BufferManager {
     pub active_ray_counter: wgpu::Buffer,  // atomic
     pub active_ray_indirect: wgpu::Buffer, // Indirect
     // scene dependent
-    // pub bvh_buffer: wgpu::Buffer, // Bvh[# node]
+    pub bvh_buffer: wgpu::Buffer,       // Bvh[# node]
     pub objects_buffer: wgpu::Buffer,   // Object[# object]
     pub materials_buffer: wgpu::Buffer, // Material[# material]
     // size dependent
@@ -59,6 +59,7 @@ impl BufferManager {
             active_ray_counter,
             active_ray_indirect,
 
+            bvh_buffer: scene_dependent.bvh_buffer,
             objects_buffer: scene_dependent.objects_buffer,
             materials_buffer: scene_dependent.materials_buffer,
 
@@ -71,7 +72,16 @@ impl BufferManager {
     }
 
     fn get_scene_dependent_buffers(device: &wgpu::Device, scene: &Scene) -> SceneDependentBuffers {
-        // todo: bvh
+        let mut bvh_raw: Vec<f32> = scene.bvh.to_raw();
+        while bvh_raw.len() < 20 {
+            bvh_raw.extend(vec![-1.0; 12]);
+        }
+
+        let bvh_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("BVH Buffer"),
+            usage: wgpu::BufferUsages::STORAGE,
+            contents: bytemuck::cast_slice(bvh_raw.as_slice()),
+        });
 
         let mut objects_raw: Vec<f32> = vec![];
         for object in &scene.objects {
@@ -102,6 +112,7 @@ impl BufferManager {
         });
 
         SceneDependentBuffers {
+            bvh_buffer,
             objects_buffer,
             materials_buffer,
         }
@@ -161,6 +172,7 @@ impl BufferManager {
 
     pub fn write_scene(&mut self, device: &wgpu::Device, scene: &Scene) {
         let scene_dependent = BufferManager::get_scene_dependent_buffers(device, scene);
+        self.bvh_buffer = scene_dependent.bvh_buffer;
         self.objects_buffer = scene_dependent.objects_buffer;
         self.materials_buffer = scene_dependent.materials_buffer;
     }
@@ -176,6 +188,7 @@ impl BufferManager {
 }
 
 struct SceneDependentBuffers {
+    bvh_buffer: wgpu::Buffer,
     objects_buffer: wgpu::Buffer,
     materials_buffer: wgpu::Buffer,
 }

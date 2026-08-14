@@ -66,7 +66,7 @@ impl State {
         let surface_format = surface_caps
             .formats
             .iter()
-            .find(|f| f.is_srgb()) // TODO: switch back to sRGB?
+            .find(|f| f.is_srgb()) // todo: decide if sRGB?
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
@@ -149,7 +149,7 @@ impl ApplicationHandler for WindowManager {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes()
             .with_title("Raytracer")
-            .with_visible(true); // TODO: hidden while launching?
+            .with_visible(true); // todo: hidden while launching?
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
         self.state = Some(pollster::block_on(State::new(window)).unwrap());

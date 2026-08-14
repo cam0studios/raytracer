@@ -4,7 +4,6 @@ use dyn_clone::{DynClone, clone_trait_object};
 use glam::Vec3;
 
 // Primitives
-// todo: make primitive a trait?
 
 pub trait Primitive: DynClone {
     fn get_center(&self) -> Vec3;
@@ -152,10 +151,18 @@ pub struct Bvh {
     pub aabb: Aabb,
     pub left: Option<Box<Bvh>>,
     pub right: Option<Box<Bvh>>,
-    pub primitives: Vec<Box<dyn Primitive>>,
+    pub primitive: Option<Box<dyn Primitive>>,
 }
 impl Bvh {
-    // TODO: use indices instead of references, store all bvhs in a list
+    pub fn new() -> Self {
+        Self {
+            aabb: Aabb::new(),
+            left: None,
+            right: None,
+            primitive: None,
+        }
+    }
+    // todo: use indices instead of references, store all bvhs in a list?
     pub fn from_primitives(primitives: &Vec<Box<dyn Primitive>>) -> Self {
         let aabb = Aabb::from_primitives(primitives);
         if primitives.len() < 2 {
@@ -163,11 +170,11 @@ impl Bvh {
                 aabb,
                 left: None,
                 right: None,
-                primitives: primitives.clone(),
+                primitive: primitives.get(0).cloned(),
             };
         }
 
-        // TODO: surface area heuristic
+        // todo: surface area heuristic
         let split_dim = if aabb.size.x >= aabb.size.y && aabb.size.x >= aabb.size.z {
             0
         } else if aabb.size.y >= aabb.size.z {
@@ -222,23 +229,26 @@ impl Bvh {
         };
 
         Self {
-            primitives: vec![],
+            primitive: None,
             aabb,
             left: bvh_left,
             right: bvh_right,
         }
     }
+    pub fn to_raw(&self) -> Vec<f32> {
+        let mut raw: Vec<f32> = vec![];
+        raw.extend(self.aabb.pos.to_array());
+        raw.push(0.0);
+        raw.extend(self.aabb.size.to_array());
+        raw.push(0.0);
+        raw.push(0.0);
+        raw.extend(vec![0.0; 3]);
+        raw
+    }
     pub fn to_string(&self) -> String {
         let indent = "    ";
-        if self.primitives.len() > 0 {
-            return format!(
-                "BVH Leaf: {{\n{}\n}}",
-                self.primitives
-                    .iter()
-                    .map(|prim| format!("{}{}", indent, prim.to_string()))
-                    .collect::<Vec<String>>()
-                    .join("\n")
-            );
+        if let Some(prim) = &self.primitive {
+            return format!("BVH Leaf: {{\n{}{}\n}}", indent, prim.to_string());
         }
         let left = match &self.left {
             Some(bvh) => bvh.to_string(),
@@ -258,7 +268,6 @@ impl Bvh {
 }
 
 // lambertian
-// todo: material as trait
 pub trait Material: DynClone {
     fn to_raw(&self) -> Vec<f32>;
 }
@@ -313,7 +322,16 @@ pub fn test() {
 }
 
 pub struct Scene {
+    pub bvh: Bvh,
     pub objects: Vec<Box<dyn Primitive>>,
-    // pub bvh
     pub materials: Vec<Box<dyn Material>>,
+}
+impl Scene {
+    pub fn new() -> Self {
+        Self {
+            bvh: Bvh::new(),
+            objects: vec![],
+            materials: vec![],
+        }
+    }
 }
