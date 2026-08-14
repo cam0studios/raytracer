@@ -61,3 +61,9 @@ struct Object {
     material: f32,
     datam: mat2x4f,
 }
+
+struct Material {
+    datav: vec3f,
+    kind: f32,
+    datam: mat3x4f,
+}

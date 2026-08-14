@@ -12,8 +12,8 @@ pub struct BufferManager {
     pub active_ray_indirect: wgpu::Buffer, // Indirect
     // scene dependent
     // pub bvh_buffer: wgpu::Buffer, // Bvh[# node]
-    pub objects_buffer: wgpu::Buffer, // Object[# object]
-    // pub materials_buffer: wgpu::Buffer, // Material[# material]
+    pub objects_buffer: wgpu::Buffer,   // Object[# object]
+    pub materials_buffer: wgpu::Buffer, // Material[# material]
     // size dependent
     pub rays_buffer: wgpu::Buffer,          // Ray[# active]
     pub active_rays_buffer: wgpu::Buffer,   // u32[# active / 32] (packed bits)
@@ -60,6 +60,7 @@ impl BufferManager {
             active_ray_indirect,
 
             objects_buffer: scene_dependent.objects_buffer,
+            materials_buffer: scene_dependent.materials_buffer,
 
             rays_buffer: size_dependent.rays_buffer,
             active_rays_buffer: size_dependent.active_rays_buffer,
@@ -70,13 +71,12 @@ impl BufferManager {
     }
 
     fn get_scene_dependent_buffers(device: &wgpu::Device, scene: &Scene) -> SceneDependentBuffers {
-        let mut objects_raw: std::vec::Vec<f32> = vec![];
+        // todo: bvh
 
+        let mut objects_raw: std::vec::Vec<f32> = vec![];
         for object in &scene.objects {
             objects_raw.extend(object.to_raw());
         }
-
-        // minimum buffer binding size
         while objects_raw.len() < 20 {
             objects_raw.extend(vec![-1.0; 16]);
         }
@@ -87,9 +87,24 @@ impl BufferManager {
             contents: bytemuck::cast_slice(objects_raw.as_slice()),
         });
 
-        // bvh, materials
+        let mut materials_raw: std::vec::Vec<f32> = vec![];
+        for material in &scene.materials {
+            materials_raw.extend(material.to_raw());
+        }
+        while materials_raw.len() < 20 {
+            materials_raw.extend(vec![-1.0; 16]);
+        }
 
-        SceneDependentBuffers { objects_buffer }
+        let materials_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Materials Buffer"),
+            usage: wgpu::BufferUsages::STORAGE,
+            contents: bytemuck::cast_slice(&materials_raw.as_slice()),
+        });
+
+        SceneDependentBuffers {
+            objects_buffer,
+            materials_buffer,
+        }
     }
 
     fn get_size_dependent_buffers(device: &wgpu::Device, size: Size) -> SizeDependentBuffers {
@@ -147,6 +162,7 @@ impl BufferManager {
     pub fn write_scene(&mut self, device: &wgpu::Device, scene: &Scene) {
         let scene_dependent = BufferManager::get_scene_dependent_buffers(device, scene);
         self.objects_buffer = scene_dependent.objects_buffer;
+        self.materials_buffer = scene_dependent.materials_buffer;
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, size: Size) {
@@ -161,6 +177,7 @@ impl BufferManager {
 
 struct SceneDependentBuffers {
     objects_buffer: wgpu::Buffer,
+    materials_buffer: wgpu::Buffer,
 }
 
 struct SizeDependentBuffers {

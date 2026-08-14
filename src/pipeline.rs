@@ -25,19 +25,31 @@ impl Pipeline {
                     scene::Primitive::Sphere(scene::Sphere {
                         center: Vec3::new(0.0, 1.1, 10.0),
                         radius: 1.2,
+                        material: 0,
                     }),
                     scene::Primitive::Sphere(scene::Sphere {
                         center: Vec3::new(0.0, -0.2, 10.0),
                         radius: 0.9,
+                        material: 0,
                     }),
                     scene::Primitive::Sphere(scene::Sphere {
                         center: Vec3::new(0.0, -1.3, 10.0),
                         radius: 0.7,
+                        material: 0,
                     }),
                     scene::Primitive::Sphere(scene::Sphere {
                         center: Vec3::new(0.0, 101.5, 10.0),
                         radius: 100.0,
+                        material: 1,
                     }),
+                ],
+                materials: vec![
+                    scene::Material {
+                        color: Vec3::new(1.0, 1.0, 1.0),
+                    },
+                    scene::Material {
+                        color: Vec3::new(0.2, 0.6, 0.1),
+                    },
                 ],
             },
         );
@@ -413,7 +425,7 @@ impl Pipeline {
                     binding: 5,
                     resource: buffers.objects_buffer.as_entire_binding(),
                 },
-                // bvh, materials
+                // bvh
             ],
         });
 
@@ -447,9 +459,12 @@ impl Pipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 6,
+                    resource: buffers.materials_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
                     resource: wgpu::BindingResource::TextureView(&buffers.output_view),
                 },
-                // materials
             ],
         });
 

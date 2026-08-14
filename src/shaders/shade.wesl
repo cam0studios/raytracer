@@ -1,6 +1,6 @@
 // accumulate shaded values, calculate ray termination and bounces
 
-import super::types::{Vars, Ray, Indirect, Intersection};
+import super::types::{Vars, Ray, Indirect, Intersection, Material};
 import super::sampling::{pcg, sample_hemisphere_cosine, lerp_3f};
 
 @group(0) @binding(0)
@@ -19,9 +19,10 @@ var<storage, read> active_ray_indirect: Indirect;
 var<storage, read> intersections: array<Intersection>;
 
 @group(0) @binding(6)
-var output: texture_storage_2d<rgba32float, read_write>;
+var<storage, read> materials: array<Material>;
 
-// materials
+@group(0) @binding(7)
+var output: texture_storage_2d<rgba32float, read_write>;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
@@ -43,10 +44,15 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
 
     if intersection.material < 0 {
         calc_termination(id, sky_shade(&ray, intersection, &rng_state));
-    } else if intersection.material == 0 {
-        calc_termination(id, lambertian_shade(&ray, intersection, &rng_state));
-    } else {
+    } else if intersection.material >= i32(arrayLength(&materials)) {
         calc_termination(id, unknown_shade(&ray, intersection, &rng_state));
+    } else {
+        let material = materials[intersection.material];
+        if material.kind == 0 {
+            calc_termination(id, lambertian_shade(&ray, intersection, material, &rng_state));
+        } else {
+            calc_termination(id, unknown_shade(&ray, intersection, &rng_state));
+        }
     }
 
     ray.rng_state = rng_state;
@@ -74,13 +80,11 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     return true;
 }
 
-fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> bool {
-    var col = vec3f(0.9, 0.9, 0.9);
-
+fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection, material: Material, rng_state: ptr<function, u32>) -> bool {
     // let dot = -dot(ray.direction, intersection.normal);
     // col *= dot;
 
-    ray.throughput *= col;
+    ray.throughput *= material.datav;
 
     ray.origin += ray.direction * intersection.dist;
     ray.direction = sample_hemisphere_cosine(rng_state, intersection.normal);

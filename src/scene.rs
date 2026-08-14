@@ -10,6 +10,7 @@ pub struct Triangle {
     pub v0: Vec3,
     pub v1: Vec3,
     pub v2: Vec3,
+    pub material: i32,
 }
 impl Triangle {
     pub fn new() -> Self {
@@ -17,6 +18,7 @@ impl Triangle {
             v0: Vec3::default(),
             v1: Vec3::default(),
             v2: Vec3::default(),
+            material: -1,
         }
     }
     pub fn get_center(&self) -> Vec3 {
@@ -47,6 +49,7 @@ impl Clone for Triangle {
             v0: self.v0.clone(),
             v1: self.v1.clone(),
             v2: self.v2.clone(),
+            material: self.material,
         }
     }
 }
@@ -55,12 +58,14 @@ impl Clone for Triangle {
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
+    pub material: i32,
 }
 impl Sphere {
     pub fn new() -> Self {
         Self {
             center: Vec3::default(),
             radius: 1.0,
+            material: -1,
         }
     }
     pub fn get_center(&self) -> Vec3 {
@@ -85,7 +90,7 @@ impl Sphere {
     pub fn to_raw(&self) -> std::vec::Vec<f32> {
         let mut res = vec![];
         res.extend(vec![self.center.x, self.center.y, self.center.z, 1.0]);
-        res.extend(vec![self.radius, 0.0, 0.0, 0.0]);
+        res.extend(vec![self.radius, 0.0, 0.0, self.material as f32]);
         res.extend(vec![0.0; 8]);
         res
     }
@@ -95,6 +100,7 @@ impl Clone for Sphere {
         Self {
             center: self.center.clone(),
             radius: self.radius.clone(),
+            material: self.material,
         }
     }
 }
@@ -317,30 +323,49 @@ impl Bvh {
     }
 }
 
+// lambertian
+// todo: material as trait
+pub struct Material {
+    pub color: Vec3,
+}
+impl Material {
+    pub fn to_raw(&self) -> std::vec::Vec<f32> {
+        let mut res = vec![];
+        res.extend_from_slice(&self.color.to_array());
+        res.extend(vec![0.0]);
+        res.extend(vec![0.0; 12]);
+        res
+    }
+}
+
 pub fn test() {
     let primitives = vec![
         Triangle {
             v0: Vec3::new(0.0, 0.0, 0.0),
             v1: Vec3::new(1.0, 0.0, 0.0),
             v2: Vec3::new(0.0, 1.0, 0.0),
+            material: 0,
         }
         .to_primitive(),
         Triangle {
             v0: Vec3::new(5.0, 0.0, 0.0),
             v1: Vec3::new(6.0, 0.0, 0.0),
             v2: Vec3::new(5.0, 1.0, 0.0),
+            material: 0,
         }
         .to_primitive(),
         Triangle {
             v0: Vec3::new(10.0, 0.0, 0.0),
             v1: Vec3::new(11.0, 0.0, 0.0),
             v2: Vec3::new(10.0, 1.0, 0.0),
+            material: 0,
         }
         .to_primitive(),
         Triangle {
             v0: Vec3::new(3.0, 5.0, 0.0),
             v1: Vec3::new(4.0, 5.0, 0.0),
             v2: Vec3::new(3.0, 6.0, 0.0),
+            material: 0,
         }
         .to_primitive(),
     ];
@@ -351,10 +376,13 @@ pub fn test() {
 pub struct Scene {
     pub objects: std::vec::Vec<Primitive>,
     // pub bvh
-    // pub materials
+    pub materials: std::vec::Vec<Material>,
 }
 impl Scene {
     pub fn new() -> Self {
-        Self { objects: vec![] }
+        Self {
+            objects: vec![],
+            materials: vec![],
+        }
     }
 }
