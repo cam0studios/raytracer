@@ -73,7 +73,7 @@ impl BufferManager {
     fn get_scene_dependent_buffers(device: &wgpu::Device, scene: &Scene) -> SceneDependentBuffers {
         // todo: bvh
 
-        let mut objects_raw: std::vec::Vec<f32> = vec![];
+        let mut objects_raw: Vec<f32> = vec![];
         for object in &scene.objects {
             objects_raw.extend(object.to_raw());
         }
@@ -87,7 +87,7 @@ impl BufferManager {
             contents: bytemuck::cast_slice(objects_raw.as_slice()),
         });
 
-        let mut materials_raw: std::vec::Vec<f32> = vec![];
+        let mut materials_raw: Vec<f32> = vec![];
         for material in &scene.materials {
             materials_raw.extend(material.to_raw());
         }

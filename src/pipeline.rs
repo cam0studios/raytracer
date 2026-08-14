@@ -3,7 +3,11 @@
 use glam::Vec3;
 use wesl::{StandardResolver, Wesl};
 
-use crate::{buffers::BufferManager, scene, window::Context};
+use crate::{
+    buffers::BufferManager,
+    scene::{Lambertian, Scene, Sphere},
+    window::Context,
+};
 
 const CONSTS: Consts = Consts { bounces: 10 };
 
@@ -20,36 +24,36 @@ impl Pipeline {
         let buffers = BufferManager::new(
             device,
             config,
-            &scene::Scene {
+            &Scene {
                 objects: vec![
-                    scene::Primitive::Sphere(scene::Sphere {
+                    Box::new(Sphere {
                         center: Vec3::new(0.0, 1.1, 10.0),
                         radius: 1.2,
                         material: 0,
                     }),
-                    scene::Primitive::Sphere(scene::Sphere {
+                    Box::new(Sphere {
                         center: Vec3::new(0.0, -0.2, 10.0),
                         radius: 0.9,
                         material: 0,
                     }),
-                    scene::Primitive::Sphere(scene::Sphere {
+                    Box::new(Sphere {
                         center: Vec3::new(0.0, -1.3, 10.0),
                         radius: 0.7,
                         material: 0,
                     }),
-                    scene::Primitive::Sphere(scene::Sphere {
+                    Box::new(Sphere {
                         center: Vec3::new(0.0, 101.5, 10.0),
                         radius: 100.0,
                         material: 1,
                     }),
                 ],
                 materials: vec![
-                    scene::Material {
+                    Box::new(Lambertian {
                         color: Vec3::new(1.0, 1.0, 1.0),
-                    },
-                    scene::Material {
+                    }),
+                    Box::new(Lambertian {
                         color: Vec3::new(0.2, 0.6, 0.1),
-                    },
+                    }),
                 ],
             },
         );
