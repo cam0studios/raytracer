@@ -17,10 +17,10 @@ struct Vars {
 
 struct Bvh {
     pos: vec3f,
-    left: f32,
+    left: i32,
     size: vec3f,
-    right: f32,
-    object: f32,
+    right: i32,
+    object: i32,
     skip: vec3f,
 }
 
@@ -52,14 +52,14 @@ struct Indirect {
 
 struct Object {
     origin: vec3f,
-    kind: f32,
+    kind: u32,
     datav: vec3f,
-    material: f32,
+    material: u32,
     datam: mat2x4f,
 }
 
 struct Material {
     datav: vec3f,
-    kind: f32,
+    kind: u32,
     datam: mat3x4f,
 }

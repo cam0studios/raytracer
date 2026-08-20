@@ -2,7 +2,10 @@
 
 use wgpu::util::DeviceExt;
 
-use crate::{pipeline::Size, scene::Scene};
+use crate::{
+    pipeline::Size,
+    scene::{Bvh, Material, Primitive, Scene},
+};
 
 pub struct BufferManager {
     // static size
@@ -72,43 +75,40 @@ impl BufferManager {
     }
 
     fn get_scene_dependent_buffers(device: &wgpu::Device, scene: &Scene) -> SceneDependentBuffers {
-        let mut bvh_raw: Vec<f32> = scene.bvh.to_raw();
-        while bvh_raw.len() < 20 {
-            bvh_raw.extend(vec![-1.0; 12]);
+        let mut bvh_raw: Vec<[u8; 48]> = scene.bvhs.iter().map(Bvh::raw).collect();
+        while bvh_raw.len() < 2 {
+            bvh_raw.push(Bvh::empty_raw());
         }
 
+        let bvh_contents: &[u8] = bytemuck::cast_slice(&bvh_raw);
         let bvh_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("BVH Buffer"),
             usage: wgpu::BufferUsages::STORAGE,
-            contents: bytemuck::cast_slice(bvh_raw.as_slice()),
+            contents: bvh_contents,
         });
 
-        let mut objects_raw: Vec<f32> = vec![];
-        for object in &scene.objects {
-            objects_raw.extend(object.to_raw());
-        }
-        while objects_raw.len() < 20 {
-            objects_raw.extend(vec![-1.0; 16]);
+        let mut objects_raw: Vec<[u8; 64]> = scene.primitives.iter().map(Primitive::raw).collect();
+        while objects_raw.len() < 2 {
+            objects_raw.push(Primitive::empty_raw());
         }
 
+        let objects_contents: &[u8] = bytemuck::cast_slice(&objects_raw);
         let objects_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Objects Buffer"),
             usage: wgpu::BufferUsages::STORAGE,
-            contents: bytemuck::cast_slice(objects_raw.as_slice()),
+            contents: objects_contents,
         });
 
-        let mut materials_raw: Vec<f32> = vec![];
-        for material in &scene.materials {
-            materials_raw.extend(material.to_raw());
-        }
-        while materials_raw.len() < 20 {
-            materials_raw.extend(vec![-1.0; 16]);
+        let mut materials_raw: Vec<[u8; 64]> = scene.materials.iter().map(Material::raw).collect();
+        while materials_raw.len() < 2 {
+            materials_raw.push(Material::empty_raw());
         }
 
+        let materials_contents: &[u8] = bytemuck::cast_slice(&materials_raw);
         let materials_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Materials Buffer"),
             usage: wgpu::BufferUsages::STORAGE,
-            contents: bytemuck::cast_slice(&materials_raw.as_slice()),
+            contents: materials_contents,
         });
 
         SceneDependentBuffers {
@@ -211,7 +211,7 @@ impl Vars {
         let size_slice_binding = [self.size.0, self.size.1];
         let frame_slice_binding = [self.frame];
         let bounce_slice_binding = [self.bounce];
-        let mut ret = [0 as u8; 16];
+        let mut ret = [0u8; 16];
         ret[..8].copy_from_slice(bytemuck::cast_slice(&size_slice_binding));
         ret[8..12].copy_from_slice(bytemuck::cast_slice(&frame_slice_binding));
         ret[12..16].copy_from_slice(bytemuck::cast_slice(&bounce_slice_binding));

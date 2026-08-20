@@ -37,9 +37,6 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     for (var i = 0u; i < arrayLength(&objects); i++) {
         let obj = objects[i];
         var intersection = intersection_none();
-        if obj.kind < -1 {
-            break;
-        }
         if obj.kind == 0 {
             // triangle
         } else if obj.kind == 1 {

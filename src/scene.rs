@@ -1,91 +1,147 @@
 // scene data, bvh
 
-use dyn_clone::{DynClone, clone_trait_object};
 use glam::Vec3;
+use std::fmt::{self, Debug};
+
+// Id types
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PrimitiveId(pub usize);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BvhId(pub usize);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MaterialId(pub usize);
 
 // Primitives
 
-pub trait Primitive: DynClone {
-    fn get_center(&self) -> Vec3;
-    fn get_aabb(&self) -> Aabb;
-    fn to_string(&self) -> String;
-    fn to_raw(&self) -> Vec<f32>;
+#[derive(Clone)]
+pub enum Primitive {
+    Triangle(Triangle),
+    Sphere(Sphere),
 }
-clone_trait_object!(Primitive);
+impl Primitive {
+    pub fn material(&self) -> MaterialId {
+        match self {
+            Self::Triangle(t) => t.material,
+            Self::Sphere(s) => s.material,
+        }
+    }
+    pub fn center(&self) -> Vec3 {
+        match self {
+            Self::Triangle(t) => t.center(),
+            Self::Sphere(s) => s.center,
+        }
+    }
+    pub fn aabb(&self) -> Aabb {
+        match self {
+            Self::Triangle(t) => t.aabb(),
+            Self::Sphere(s) => s.aabb(),
+        }
+    }
+    pub fn raw(&self) -> [u8; 64] {
+        match self {
+            Self::Triangle(t) => t.raw(),
+            Self::Sphere(s) => s.raw(),
+        }
+    }
+    pub fn empty_raw() -> [u8; 64] {
+        Triangle::new().raw()
+    }
+}
+impl Debug for Primitive {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Triangle(t) => t.fmt(f),
+            Self::Sphere(s) => s.fmt(f),
+        }
+    }
+}
 
+#[derive(Clone)]
 pub struct Triangle {
     pub v0: Vec3,
     pub v1: Vec3,
     pub v2: Vec3,
-    pub material: i32,
+    pub material: MaterialId,
 }
-impl Primitive for Triangle {
-    fn get_center(&self) -> Vec3 {
+impl Triangle {
+    pub fn new() -> Self {
+        Self {
+            v0: Vec3::new(0.0, 0.0, 0.0),
+            v1: Vec3::new(0.0, 0.0, 0.0),
+            v2: Vec3::new(0.0, 0.0, 0.0),
+            material: MaterialId(0),
+        }
+    }
+    pub fn center(&self) -> Vec3 {
         (self.v0 + self.v1 + self.v2) / 3.0
     }
-    fn get_aabb(&self) -> Aabb {
-        Aabb::from_points(&vec![self.v0, self.v1, self.v2])
+    pub fn aabb(&self) -> Aabb {
+        Aabb::from_points(&[self.v0, self.v1, self.v2])
     }
-    fn to_string(&self) -> String {
-        format!(
-            "Triangle {}, {}, {}",
-            self.v0.to_string(),
-            self.v1.to_string(),
-            self.v2.to_string()
-        )
+    pub fn raw(&self) -> [u8; 64] {
+        let mut ret = [0u8; 64];
+        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.v0.to_array()));
+        ret[12..16].copy_from_slice(bytemuck::cast_slice(&[0u32]));
+        ret[16..28].copy_from_slice(bytemuck::cast_slice(&self.v1.to_array()));
+        ret[28..32].copy_from_slice(bytemuck::cast_slice(&[
+            u32::try_from(self.material.0).expect("material id exceeds u32")
+        ]));
+        ret[32..44].copy_from_slice(bytemuck::cast_slice(&self.v2.to_array()));
+        ret[44..64].copy_from_slice(bytemuck::cast_slice(&[0f32; 5]));
+        ret
     }
-    fn to_raw(&self) -> Vec<f32> {
-        todo!()
+    pub fn primitive(self) -> Primitive {
+        Primitive::Triangle(self)
     }
 }
-impl Clone for Triangle {
-    fn clone(&self) -> Self {
-        Self {
-            v0: self.v0,
-            v1: self.v1,
-            v2: self.v2,
-            material: self.material,
-        }
+impl Debug for Triangle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Triangle {:?}, {:?}, {:?}", self.v0, self.v1, self.v2)
     }
 }
 
+#[derive(Clone)]
 pub struct Sphere {
     pub center: Vec3,
     pub radius: f32,
-    pub material: i32,
+    pub material: MaterialId,
 }
-impl Primitive for Sphere {
-    fn get_center(&self) -> Vec3 {
-        self.center
-    }
-    fn get_aabb(&self) -> Aabb {
-        Aabb::from_dims(
-            self.center - Vec3::new(self.radius, self.radius, self.radius),
-            Vec3::new(self.radius * 2.0, self.radius * 2.0, self.radius * 2.0),
-        )
-    }
-    fn to_string(&self) -> String {
-        format!(
-            "Sphere center {} radius {}",
-            self.center.to_string(),
-            self.radius.to_string()
-        )
-    }
-    fn to_raw(&self) -> Vec<f32> {
-        let mut res = vec![];
-        res.extend(vec![self.center.x, self.center.y, self.center.z, 1.0]);
-        res.extend(vec![self.radius, 0.0, 0.0, self.material as f32]);
-        res.extend(vec![0.0; 8]);
-        res
-    }
-}
-impl Clone for Sphere {
-    fn clone(&self) -> Self {
+impl Sphere {
+    pub fn new() -> Self {
         Self {
-            center: self.center,
-            radius: self.radius,
-            material: self.material,
+            center: Vec3::new(0.0, 0.0, 0.0),
+            radius: 0.0,
+            material: MaterialId(0),
         }
+    }
+    pub fn aabb(&self) -> Aabb {
+        Aabb {
+            pos: self.center - Vec3::new(self.radius, self.radius, self.radius),
+            size: Vec3::new(self.radius * 2.0, self.radius * 2.0, self.radius * 2.0),
+        }
+    }
+    pub fn raw(&self) -> [u8; 64] {
+        let mut ret = [0u8; 64];
+        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.center.to_array()));
+        ret[12..16].copy_from_slice(bytemuck::cast_slice(&[1u32]));
+        ret[16..28].copy_from_slice(bytemuck::cast_slice(&[self.radius as f32, 0f32, 0f32]));
+        ret[28..32].copy_from_slice(bytemuck::cast_slice(&[
+            u32::try_from(self.material.0).expect("material ID exceeds u32")
+        ]));
+        ret[32..64].copy_from_slice(bytemuck::cast_slice(&[0f32; 8]));
+        ret
+    }
+    pub fn primitive(self) -> Primitive {
+        Primitive::Sphere(self)
+    }
+}
+impl Debug for Sphere {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Sphere center {:?} radius {:?}",
+            self.center, self.radius
+        )
     }
 }
 
@@ -94,6 +150,7 @@ impl Clone for Sphere {
 const MARGIN: f32 = 0.00001;
 const MARGIN_V: Vec3 = Vec3::new(MARGIN, MARGIN, MARGIN);
 
+#[derive(Clone, Debug, Copy)]
 pub struct Aabb {
     pub pos: Vec3,
     pub size: Vec3,
@@ -101,17 +158,11 @@ pub struct Aabb {
 impl Aabb {
     pub fn new() -> Self {
         Self {
-            pos: -MARGIN_V,
-            size: MARGIN_V * 2.0,
+            pos: Vec3::new(0.0, 0.0, 0.0),
+            size: Vec3::new(0.0, 0.0, 0.0),
         }
     }
-    pub fn from_dims(pos: Vec3, size: Vec3) -> Self {
-        Self {
-            pos: pos - MARGIN_V,
-            size: size + MARGIN_V * 2.0,
-        }
-    }
-    pub fn from_points(points: &Vec<Vec3>) -> Self {
+    pub fn from_points(points: &[Vec3]) -> Self {
         let first = match points.first() {
             Some(p) => p,
             None => return Self::new(),
@@ -122,36 +173,56 @@ impl Aabb {
             min = min.min(*point);
             max = max.max(*point);
         }
-        Self::from_dims(min, max - min)
-    }
-    pub fn from_aabbs(aabbs: &Vec<Aabb>) -> Self {
-        let first = match aabbs.first() {
-            Some(p) => p,
-            None => return Self::new(),
-        };
-        let mut min = first.pos;
-        let mut max = first.pos + first.size;
-        for aabb in aabbs.iter().skip(1) {
-            min = min.min(aabb.pos);
-            max = max.max(aabb.pos + aabb.size);
-        }
         Self {
             pos: min,
             size: max - min,
         }
     }
-    pub fn from_primitives(primitives: &Vec<Box<dyn Primitive>>) -> Self {
-        Self::from_aabbs(&primitives.iter().map(|prim| prim.get_aabb()).collect())
+    pub fn from_aabbs(aabbs: &[Aabb]) -> Self {
+        Self::from_aabb_iter(aabbs.iter().cloned())
+    }
+    pub fn from_aabb_iter<I>(aabbs: I) -> Self
+    where
+        I: IntoIterator<Item = Aabb>,
+    {
+        let mut iter = aabbs.into_iter();
+
+        let Some(first) = iter.next() else {
+            return Self::new();
+        };
+
+        let mut min = first.pos;
+        let mut max = first.pos + first.size;
+
+        for aabb in iter {
+            min = min.min(aabb.pos);
+            max = max.max(aabb.pos + aabb.size);
+        }
+
+        Self {
+            pos: min,
+            size: max - min,
+        }
+    }
+    pub fn from_primitives(primitives: &[Primitive], ids: &[PrimitiveId]) -> Self {
+        Self::from_aabb_iter(ids.iter().map(|id| primitives[id.0].aabb()))
+    }
+    pub fn with_margin(&self) -> Self {
+        Aabb {
+            pos: self.pos - MARGIN_V,
+            size: self.size + 2.0 * MARGIN_V,
+        }
     }
 }
 
 // BVH
 
+#[derive(Clone, Debug)]
 pub struct Bvh {
     pub aabb: Aabb,
-    pub left: Option<Box<Bvh>>,
-    pub right: Option<Box<Bvh>>,
-    pub primitive: Option<Box<dyn Primitive>>,
+    pub left: Option<BvhId>,
+    pub right: Option<BvhId>,
+    pub primitive: Option<PrimitiveId>,
 }
 impl Bvh {
     pub fn new() -> Self {
@@ -162,16 +233,33 @@ impl Bvh {
             primitive: None,
         }
     }
-    // todo: use indices instead of references, store all bvhs in a list?
-    pub fn from_primitives(primitives: &Vec<Box<dyn Primitive>>) -> Self {
-        let aabb = Aabb::from_primitives(primitives);
-        if primitives.len() < 2 {
-            return Self {
-                aabb,
-                left: None,
-                right: None,
-                primitive: primitives.get(0).cloned(),
-            };
+
+    pub fn build(primitives: &[Primitive]) -> Vec<Self> {
+        if primitives.is_empty() {
+            return vec![Bvh::new()];
+        }
+
+        let ids: Vec<PrimitiveId> = (0..primitives.len()).map(|u| PrimitiveId(u)).collect();
+        let mut nodes = Vec::new();
+
+        Self::build_node(primitives, &ids, &mut nodes);
+
+        nodes
+    }
+
+    fn build_node(primitives: &[Primitive], ids: &[PrimitiveId], nodes: &mut Vec<Bvh>) -> BvhId {
+        let aabb = Aabb::from_primitives(primitives, ids).with_margin();
+        let node_id = BvhId(nodes.len());
+        nodes.push(Bvh {
+            aabb,
+            left: None,
+            right: None,
+            primitive: None,
+        });
+
+        if ids.len() <= 1 {
+            nodes[node_id.0].primitive = ids.get(0).copied();
+            return node_id;
         }
 
         // todo: surface area heuristic
@@ -183,155 +271,203 @@ impl Bvh {
             2
         };
 
-        let mut primitive_is: Vec<(usize, f32)> = primitives
-            .iter()
-            .enumerate()
-            .map(|(i, prim)| (i, prim.get_center()[split_dim]))
-            .collect();
-        primitive_is.sort_by(|a, b| a.1.total_cmp(&b.1));
+        let mut sorted_ids = ids.to_vec();
+        sorted_ids.sort_by(|a, b| {
+            primitives[a.0].center()[split_dim].total_cmp(&primitives[b.0].center()[split_dim])
+        });
 
-        let split_i = primitives.len() / 2;
+        let split = ids.len() / 2;
 
-        let primitive_is_left: Vec<usize> =
-            primitive_is[0..split_i].iter().map(|(i, _)| *i).collect();
-        let primitive_is_right: Vec<usize> =
-            primitive_is[split_i..].iter().map(|(i, _)| *i).collect();
+        let left = Self::build_node(primitives, &sorted_ids[..split], nodes);
+        let right = Self::build_node(primitives, &sorted_ids[split..], nodes);
 
-        let bvh_left = if primitive_is_left.len() == 0 {
-            None
-        } else {
-            Some(Box::new(Bvh::from_primitives(
-                &primitive_is_left
-                    .iter()
-                    .map(|i| {
-                        primitives
-                            .get(*i)
-                            .expect("range created value can't be out of bounds")
-                            .clone()
-                    })
-                    .collect(),
-            )))
-        };
-        let bvh_right = if primitive_is_right.len() == 0 {
-            None
-        } else {
-            Some(Box::new(Bvh::from_primitives(
-                &primitive_is_right
-                    .iter()
-                    .map(|i| {
-                        primitives
-                            .get(*i)
-                            .expect("range created value can't be out of bounds")
-                            .clone()
-                    })
-                    .collect(),
-            )))
-        };
+        nodes[node_id.0].left = Some(left);
+        nodes[node_id.0].right = Some(right);
 
-        Self {
-            primitive: None,
-            aabb,
-            left: bvh_left,
-            right: bvh_right,
-        }
+        node_id
     }
-    pub fn to_raw(&self) -> Vec<f32> {
-        let mut raw: Vec<f32> = vec![];
-        raw.extend(self.aabb.pos.to_array());
-        raw.push(0.0);
-        raw.extend(self.aabb.size.to_array());
-        raw.push(0.0);
-        raw.push(0.0);
-        raw.extend(vec![0.0; 3]);
-        raw
+
+    pub fn raw(&self) -> [u8; 48] {
+        let mut ret = [0u8; 48];
+        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.aabb.pos.to_array()));
+        ret[12..16].copy_from_slice(bytemuck::cast_slice(&[self.left.map_or(-1i32, |left| {
+            i32::try_from(left.0).expect("bvh id exceeds i32")
+        })]));
+        ret[16..28].copy_from_slice(bytemuck::cast_slice(&self.aabb.size.to_array()));
+        ret[28..32].copy_from_slice(bytemuck::cast_slice(&[self.right.map_or(-1i32, |right| {
+            i32::try_from(right.0).expect("bvh id exceeds i32")
+        })]));
+        ret[32..36].copy_from_slice(bytemuck::cast_slice(&[self
+            .primitive
+            .map_or(-1i32, |prim| {
+                i32::try_from(prim.0).expect("primitive id exceeds i32")
+            })]));
+        ret[36..48].copy_from_slice(bytemuck::cast_slice(&[0f32; 3]));
+        ret
     }
-    pub fn to_string(&self) -> String {
+
+    pub fn empty_raw() -> [u8; 48] {
+        Bvh::new().raw()
+    }
+
+    pub fn with_context<'a>(&'a self, scene: &'a Scene) -> BvhContext<'a> {
+        BvhContext { bvh: self, scene }
+    }
+
+    pub fn fmt_with_indent(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        depth: usize,
+        scene: &Scene,
+    ) -> fmt::Result {
         let indent = "    ";
-        if let Some(prim) = &self.primitive {
-            return format!("BVH Leaf: {{\n{}{}\n}}", indent, prim.to_string());
+        let pad = indent.repeat(depth);
+
+        if let Some(id) = &self.primitive {
+            writeln!(f, "{pad}BVH Leaf: {{")?;
+            writeln!(f, "{pad}{indent}{:?}", self.aabb)?;
+            writeln!(f, "{pad}{indent}{:?}", scene.primitives.get(id.0))?;
+            write!(f, "{pad}}}")?;
+            return Ok(());
         }
-        let left = match &self.left {
-            Some(bvh) => bvh.to_string(),
-            None => "<none>".to_string(),
-        };
-        let right = match &self.right {
-            Some(bvh) => bvh.to_string(),
-            None => "<none>".to_string(),
-        };
-        let total = format!("{}\nAND\n{}", left, right)
-            .lines()
-            .map(|line| format!("{}{}", indent, line))
-            .collect::<Vec<String>>()
-            .join("\n");
-        return format!("BVH: {{\n{}\n}}", total);
+
+        writeln!(f, "{pad}BVH: {{")?;
+        writeln!(f, "{pad}{indent}{:?}", self.aabb)?;
+        if let Some(left) = &self.left {
+            scene.bvhs[left.0].fmt_with_indent(f, depth + 1, scene)?;
+        } else {
+            writeln!(f, "{pad}{indent}<none>")?;
+        }
+        writeln!(f, "\n{pad}{indent}AND")?;
+        if let Some(right) = &self.right {
+            scene.bvhs[right.0].fmt_with_indent(f, depth + 1, scene)?;
+        } else {
+            writeln!(f, "{pad}{indent}<none>")?;
+        }
+        write!(f, "\n{pad}}}")
+    }
+}
+
+pub struct BvhContext<'a> {
+    bvh: &'a Bvh,
+    scene: &'a Scene,
+}
+impl<'a> Debug for BvhContext<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.bvh.fmt_with_indent(f, 0, self.scene)
     }
 }
 
 // lambertian
-pub trait Material: DynClone {
-    fn to_raw(&self) -> Vec<f32>;
+pub enum Material {
+    Lambertian(Lambertian),
 }
-clone_trait_object!(Material);
+impl Material {
+    pub fn raw(&self) -> [u8; 64] {
+        match self {
+            Self::Lambertian(l) => l.raw(),
+        }
+    }
+    pub fn empty_raw() -> [u8; 64] {
+        Lambertian::new().raw()
+    }
+}
 
+#[derive(Clone, Debug)]
 pub struct Lambertian {
     pub color: Vec3,
 }
-impl Material for Lambertian {
-    fn to_raw(&self) -> Vec<f32> {
-        let mut res = vec![];
-        res.extend_from_slice(&self.color.to_array());
-        res.extend(vec![0.0]);
-        res.extend(vec![0.0; 12]);
-        res
+impl Lambertian {
+    pub fn new() -> Self {
+        Self {
+            color: Vec3::new(0.0, 0.0, 0.0),
+        }
     }
-}
-impl Clone for Lambertian {
-    fn clone(&self) -> Self {
-        Self { color: self.color }
+    pub fn raw(&self) -> [u8; 64] {
+        let mut ret = [0u8; 64];
+        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.color.to_array()));
+        ret[12..16].copy_from_slice(bytemuck::cast_slice(&[0u32]));
+        ret[16..64].copy_from_slice(bytemuck::cast_slice(&[0f32; 12]));
+        ret
     }
-}
-
-pub fn test() {
-    let primitives: Vec<Box<dyn Primitive>> = vec![
-        Box::new(Triangle {
-            v0: Vec3::new(0.0, 0.0, 0.0),
-            v1: Vec3::new(1.0, 0.0, 0.0),
-            v2: Vec3::new(0.0, 1.0, 0.0),
-            material: 0,
-        }),
-        Box::new(Triangle {
-            v0: Vec3::new(5.0, 0.0, 0.0),
-            v1: Vec3::new(6.0, 0.0, 0.0),
-            v2: Vec3::new(5.0, 1.0, 0.0),
-            material: 0,
-        }),
-        Box::new(Sphere {
-            center: Vec3::new(10.0, 0.0, 0.0),
-            radius: 0.0,
-            material: 0,
-        }),
-        Box::new(Triangle {
-            v0: Vec3::new(3.0, 5.0, 0.0),
-            v1: Vec3::new(4.0, 5.0, 0.0),
-            v2: Vec3::new(3.0, 6.0, 0.0),
-            material: 0,
-        }),
-    ];
-    let bvh = Bvh::from_primitives(&primitives);
-    println!("{}", bvh.to_string());
+    pub fn material(self) -> Material {
+        Material::Lambertian(self)
+    }
 }
 
 pub struct Scene {
-    pub bvh: Bvh,
-    pub objects: Vec<Box<dyn Primitive>>,
-    pub materials: Vec<Box<dyn Material>>,
+    pub bvhs: Vec<Bvh>,
+    pub primitives: Vec<Primitive>,
+    pub materials: Vec<Material>,
 }
 impl Scene {
     pub fn new() -> Self {
         Self {
-            bvh: Bvh::new(),
-            objects: vec![],
+            bvhs: vec![Bvh::new()],
+            primitives: vec![],
             materials: vec![],
         }
     }
+    pub fn from_data(primitives: Vec<Primitive>, materials: Vec<Material>) -> Self {
+        for primitive in &primitives {
+            materials
+                .get(primitive.material().0)
+                .expect("material id is invalid");
+        }
+        Self {
+            bvhs: Bvh::build(&primitives),
+            primitives,
+            materials,
+        }
+    }
+    pub fn rebuild_bvh(&mut self) {
+        self.bvhs = Bvh::build(&self.primitives);
+    }
+}
+
+pub fn test() {
+    let scene = Scene::from_data(
+        vec![
+            Triangle {
+                v0: Vec3::new(0.0, 0.0, 0.0),
+                v1: Vec3::new(1.0, 0.0, 0.0),
+                v2: Vec3::new(0.0, 1.0, 0.0),
+                material: MaterialId(0),
+            }
+            .primitive(),
+            Triangle {
+                v0: Vec3::new(5.0, 0.0, 0.0),
+                v1: Vec3::new(6.0, 0.0, 0.0),
+                v2: Vec3::new(5.0, 1.0, 0.0),
+                material: MaterialId(0),
+            }
+            .primitive(),
+            Sphere {
+                center: Vec3::new(10.0, 0.0, 0.0),
+                radius: 1.0,
+                material: MaterialId(0),
+            }
+            .primitive(),
+            Triangle {
+                v0: Vec3::new(3.0, 5.0, 0.0),
+                v1: Vec3::new(4.0, 5.0, 0.0),
+                v2: Vec3::new(3.0, 6.0, 0.0),
+                material: MaterialId(0),
+            }
+            .primitive(),
+            Sphere {
+                center: Vec3::new(0.0, 0.0, 5.0),
+                radius: 1.0,
+                material: MaterialId(0),
+            }
+            .primitive(),
+        ],
+        vec![
+            Lambertian {
+                color: Vec3::new(1.0, 1.0, 1.0),
+            }
+            .material(),
+        ],
+    );
+    println!("{:?}", scene.bvhs[0].with_context(&scene));
 }

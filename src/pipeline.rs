@@ -5,7 +5,7 @@ use wesl::{StandardResolver, Wesl};
 
 use crate::{
     buffers::BufferManager,
-    scene::{Bvh, Lambertian, Primitive, Scene, Sphere},
+    scene::{Bvh, Lambertian, Material, MaterialId, Primitive, Scene, Sphere},
     window::Context,
 };
 
@@ -21,44 +21,46 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         // todo: better location for scene
-        let objects: Vec<Box<dyn Primitive>> = vec![
-            Box::new(Sphere {
-                center: Vec3::new(0.0, 1.1, 10.0),
-                radius: 1.2,
-                material: 0,
-            }),
-            Box::new(Sphere {
-                center: Vec3::new(0.0, -0.2, 10.0),
-                radius: 0.9,
-                material: 0,
-            }),
-            Box::new(Sphere {
-                center: Vec3::new(0.0, -1.3, 10.0),
-                radius: 0.7,
-                material: 0,
-            }),
-            Box::new(Sphere {
-                center: Vec3::new(0.0, 101.5, 10.0),
-                radius: 100.0,
-                material: 1,
-            }),
-        ];
-        let buffers = BufferManager::new(
-            device,
-            config,
-            &Scene {
-                bvh: Bvh::from_primitives(&objects),
-                objects,
-                materials: vec![
-                    Box::new(Lambertian {
-                        color: Vec3::new(1.0, 1.0, 1.0),
-                    }),
-                    Box::new(Lambertian {
-                        color: Vec3::new(0.2, 0.6, 0.1),
-                    }),
-                ],
-            },
+        let scene = Scene::from_data(
+            vec![
+                Sphere {
+                    center: Vec3::new(0.0, 1.1, 10.0),
+                    radius: 1.2,
+                    material: MaterialId(0),
+                }
+                .primitive(),
+                Sphere {
+                    center: Vec3::new(0.0, -0.2, 10.0),
+                    radius: 0.9,
+                    material: MaterialId(0),
+                }
+                .primitive(),
+                Sphere {
+                    center: Vec3::new(0.0, -1.3, 10.0),
+                    radius: 0.7,
+                    material: MaterialId(0),
+                }
+                .primitive(),
+                Sphere {
+                    center: Vec3::new(0.0, 101.5, 10.0),
+                    radius: 100.0,
+                    material: MaterialId(1),
+                }
+                .primitive(),
+            ],
+            vec![
+                Lambertian {
+                    color: Vec3::new(1.0, 1.0, 1.0),
+                }
+                .material(),
+                Lambertian {
+                    color: Vec3::new(0.2, 0.6, 0.1),
+                }
+                .material(),
+            ],
         );
+
+        let buffers = BufferManager::new(device, config, &scene);
 
         let compiler = Wesl::new("src/shaders");
 
