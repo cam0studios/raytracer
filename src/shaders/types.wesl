@@ -15,13 +15,13 @@ struct Vars {
     bounce: u32,
 }
 
+// todo: store object index as negative left index, object count as negative right index
 struct Bvh {
-    pos: vec3f,
+    min: vec3f,
     left: i32,
-    size: vec3f,
+    max: vec3f,
     right: i32,
     object: i32,
-    skip: vec3f,
 }
 
 struct Ray {
@@ -31,6 +31,8 @@ struct Ray {
     pixel_y: i32,
     direction: vec3f,
     rng_state: u32,
+    inv_dir: vec3f,
+    skip: f32,
 }
 
 struct Intersection {
@@ -62,4 +64,9 @@ struct Material {
     datav: vec3f,
     kind: u32,
     datam: mat3x4f,
+}
+
+struct Aabb {
+    min: vec3f,
+    max: vec3f,
 }

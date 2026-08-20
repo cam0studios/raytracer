@@ -1,6 +1,6 @@
 // intersect rays with scene
 
-import super::types::{Vars, Ray, Indirect, Intersection, intersection_none, Object};
+import super::types::{Vars, Ray, Indirect, Intersection, intersection_none, Bvh, Object, Aabb};
 
 @group(0) @binding(0)
 var<uniform> vars: Vars;
@@ -15,8 +15,9 @@ var<storage, read> active_ray_indirect: Indirect;
 @group(0) @binding(4)
 var<storage, read_write> intersections: array<Intersection>;
 
-// scene
 @group(0) @binding(5)
+var<storage, read> bvh: array<Bvh>;
+@group(0) @binding(6)
 var<storage, read> objects: array<Object>;
 
 @compute @workgroup_size(64)
@@ -29,25 +30,81 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     }
 
     let ray = rays[id];
+    let intersection = traverse_bvh(ray);
 
-    var min = intersection_none();
-    min.dist = 1e20;
+    intersections[id] = intersection;
+}
 
-    // todo: bvh
-    for (var i = 0u; i < arrayLength(&objects); i++) {
-        let obj = objects[i];
-        var intersection = intersection_none();
-        if obj.kind == 0 {
-            // triangle
-        } else if obj.kind == 1 {
-            intersection = sphere_intersect(ray, obj);
+// todo: wide bvh?
+fn traverse_bvh(ray: Ray) -> Intersection {
+    var stack: array<i32, 32>;
+    var stack_ptr = 0i;
+
+    stack[stack_ptr] = 0;
+    stack_ptr++;
+
+    var closest = intersection_none();
+    closest.dist = 1e38;
+
+    var iter = 0u;
+    while stack_ptr > 0 && iter < 64u {
+        iter++;
+        stack_ptr--;
+        let node_i = stack[stack_ptr];
+        if node_i < 0 || u32(node_i) >= arrayLength(&bvh) {
+            continue;
         }
-        if intersection.dist > 0 && intersection.dist < min.dist {
-            min = intersection;
+        let node = bvh[u32(node_i)];
+
+        let box_t = aabb_intersect(ray, Aabb(node.min, node.max), closest.dist);
+        if box_t < 0.0 || box_t > closest.dist {
+            continue;
+        }
+
+        if node.object >= 0 {
+            // todo: loop through multiple
+            if u32(node.object) >= arrayLength(&objects) {
+                continue;
+            }
+            let obj = objects[u32(node.object)];
+            if obj.kind == 0 {
+                // triangle
+            } else if obj.kind == 1 {
+                let t = sphere_intersect(ray, obj);
+                if t.dist > 0.0 && t.dist < closest.dist {
+                    closest = t;
+                }
+            }
+        } else {
+            // todo: closest first
+            if node.right >= 0 && stack_ptr < 32 {
+                stack[stack_ptr] = node.right;
+                stack_ptr++;
+            }
+            if node.left >= 0 && stack_ptr < 32 {
+                stack[stack_ptr] = node.left;
+                stack_ptr++;
+            }
         }
     }
 
-    intersections[id] = min;
+    return closest;
+}
+
+fn aabb_intersect(ray: Ray, aabb: Aabb, t_max: f32) -> f32 {
+    let t1 = (aabb.min - ray.origin) * ray.inv_dir;
+    let t2 = (aabb.max - ray.origin) * ray.inv_dir;
+
+    let tmin = min(t1, t2);
+    let tmax = max(t1, t2);
+
+    let t_enter = max(max(tmin.x, tmin.y), tmin.z);
+    let t_leave = min(min(tmax.x, tmax.y), tmax.z);
+
+    if t_enter <= t_leave && t_leave > 0.0 && t_enter < t_max {
+        return max(t_enter, 0.0);
+    }
+    return -1.0;
 }
 
 fn sphere_intersect(ray: Ray, sphere: Object) -> Intersection {

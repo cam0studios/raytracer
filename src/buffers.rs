@@ -121,7 +121,7 @@ impl BufferManager {
     fn get_size_dependent_buffers(device: &wgpu::Device, size: Size) -> SizeDependentBuffers {
         let rays_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Rays Buffer"),
-            size: (4 * 12 * size.0 * size.1) as u64,
+            size: (4 * 16 * size.0 * size.1) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

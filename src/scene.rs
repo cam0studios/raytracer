@@ -116,8 +116,8 @@ impl Sphere {
     }
     pub fn aabb(&self) -> Aabb {
         Aabb {
-            pos: self.center - Vec3::new(self.radius, self.radius, self.radius),
-            size: Vec3::new(self.radius * 2.0, self.radius * 2.0, self.radius * 2.0),
+            min: self.center - Vec3::new(self.radius, self.radius, self.radius),
+            max: self.center + Vec3::new(self.radius, self.radius, self.radius),
         }
     }
     pub fn raw(&self) -> [u8; 64] {
@@ -152,14 +152,14 @@ const MARGIN_V: Vec3 = Vec3::new(MARGIN, MARGIN, MARGIN);
 
 #[derive(Clone, Debug, Copy)]
 pub struct Aabb {
-    pub pos: Vec3,
-    pub size: Vec3,
+    pub min: Vec3,
+    pub max: Vec3,
 }
 impl Aabb {
     pub fn new() -> Self {
         Self {
-            pos: Vec3::new(0.0, 0.0, 0.0),
-            size: Vec3::new(0.0, 0.0, 0.0),
+            min: Vec3::new(0.0, 0.0, 0.0),
+            max: Vec3::new(0.0, 0.0, 0.0),
         }
     }
     pub fn from_points(points: &[Vec3]) -> Self {
@@ -173,10 +173,7 @@ impl Aabb {
             min = min.min(*point);
             max = max.max(*point);
         }
-        Self {
-            pos: min,
-            size: max - min,
-        }
+        Self { min, max }
     }
     pub fn from_aabbs(aabbs: &[Aabb]) -> Self {
         Self::from_aabb_iter(aabbs.iter().cloned())
@@ -191,26 +188,23 @@ impl Aabb {
             return Self::new();
         };
 
-        let mut min = first.pos;
-        let mut max = first.pos + first.size;
+        let mut min = first.min;
+        let mut max = first.max;
 
         for aabb in iter {
-            min = min.min(aabb.pos);
-            max = max.max(aabb.pos + aabb.size);
+            min = min.min(aabb.min);
+            max = max.max(aabb.max);
         }
 
-        Self {
-            pos: min,
-            size: max - min,
-        }
+        Self { min, max }
     }
     pub fn from_primitives(primitives: &[Primitive], ids: &[PrimitiveId]) -> Self {
         Self::from_aabb_iter(ids.iter().map(|id| primitives[id.0].aabb()))
     }
     pub fn with_margin(&self) -> Self {
         Aabb {
-            pos: self.pos - MARGIN_V,
-            size: self.size + 2.0 * MARGIN_V,
+            min: self.min - MARGIN_V,
+            max: self.max + MARGIN_V,
         }
     }
 }
@@ -263,9 +257,10 @@ impl Bvh {
         }
 
         // todo: surface area heuristic
-        let split_dim = if aabb.size.x >= aabb.size.y && aabb.size.x >= aabb.size.z {
+        let size = aabb.max - aabb.min;
+        let split_dim = if size.x >= size.y && size.x >= size.z {
             0
-        } else if aabb.size.y >= aabb.size.z {
+        } else if size.y >= size.z {
             1
         } else {
             2
@@ -289,11 +284,11 @@ impl Bvh {
 
     pub fn raw(&self) -> [u8; 48] {
         let mut ret = [0u8; 48];
-        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.aabb.pos.to_array()));
+        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.aabb.min.to_array()));
         ret[12..16].copy_from_slice(bytemuck::cast_slice(&[self.left.map_or(-1i32, |left| {
             i32::try_from(left.0).expect("bvh id exceeds i32")
         })]));
-        ret[16..28].copy_from_slice(bytemuck::cast_slice(&self.aabb.size.to_array()));
+        ret[16..28].copy_from_slice(bytemuck::cast_slice(&self.aabb.max.to_array()));
         ret[28..32].copy_from_slice(bytemuck::cast_slice(&[self.right.map_or(-1i32, |right| {
             i32::try_from(right.0).expect("bvh id exceeds i32")
         })]));
@@ -469,5 +464,5 @@ pub fn test() {
             .material(),
         ],
     );
-    println!("{:?}", scene.bvhs[0].with_context(&scene));
+    // println!("{:?}", scene.bvhs[0].with_context(&scene));
 }

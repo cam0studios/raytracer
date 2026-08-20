@@ -89,6 +89,7 @@ fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection, materia
     ray.origin += ray.direction * intersection.dist;
     ray.direction = sample_hemisphere_cosine(rng_state, intersection.normal);
     // ray.direction = reflect(ray.direction, intersection.normal);
+    ray.inv_dir = 1.0 / ray.direction;
 
     ray.origin += ray.direction * 1e-4; // todo: replace with threshold and data stored for next frame
 

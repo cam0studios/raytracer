@@ -5,7 +5,7 @@ use wesl::{StandardResolver, Wesl};
 
 use crate::{
     buffers::BufferManager,
-    scene::{Bvh, Lambertian, Material, MaterialId, Primitive, Scene, Sphere},
+    scene::{Lambertian, MaterialId, Scene, Sphere},
     window::Context,
 };
 
@@ -59,6 +59,10 @@ impl Pipeline {
                 .material(),
             ],
         );
+
+        println!("{:?}", scene.bvhs[0].with_context(&scene));
+        println!("{:?}", scene.bvhs[0]);
+        println!("{:?}", scene.bvhs[1]);
 
         let buffers = BufferManager::new(device, config, &scene);
 
@@ -431,9 +435,12 @@ impl Pipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
+                    resource: buffers.bvh_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
                     resource: buffers.objects_buffer.as_entire_binding(),
                 },
-                // bvh
             ],
         });
 
