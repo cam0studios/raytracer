@@ -75,7 +75,7 @@ impl BufferManager {
     }
 
     fn get_scene_dependent_buffers(device: &wgpu::Device, scene: &Scene) -> SceneDependentBuffers {
-        let mut bvh_raw: Vec<[u8; 48]> = scene.bvhs.iter().map(Bvh::raw).collect();
+        let mut bvh_raw: Vec<[u8; 32]> = scene.bvhs.iter().map(Bvh::raw).collect();
         while bvh_raw.len() < 2 {
             bvh_raw.push(Bvh::empty_raw());
         }

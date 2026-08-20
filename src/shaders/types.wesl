@@ -15,13 +15,12 @@ struct Vars {
     bounce: u32,
 }
 
-// todo: store object index as negative left index, object count as negative right index
+// todo: object count as negative right index
 struct Bvh {
     min: vec3f,
     left: i32,
     max: vec3f,
     right: i32,
-    object: i32,
 }
 
 struct Ray {

@@ -61,12 +61,21 @@ fn traverse_bvh(ray: Ray) -> Intersection {
             continue;
         }
 
-        if node.object >= 0 {
+        if node.left >= 0 {
+            if stack_ptr < 31 {
+                stack[stack_ptr] = node.right;
+                stack_ptr++;
+                stack[stack_ptr] = node.left;
+                stack_ptr++;
+            }
+        } else {
             // todo: loop through multiple
-            if u32(node.object) >= arrayLength(&objects) {
+            let obj_i = u32(-node.left - 1);
+            if u32(obj_i) >= arrayLength(&objects) {
                 continue;
             }
-            let obj = objects[u32(node.object)];
+
+            let obj = objects[obj_i];
             if obj.kind == 0 {
                 // triangle
             } else if obj.kind == 1 {
@@ -74,16 +83,6 @@ fn traverse_bvh(ray: Ray) -> Intersection {
                 if t.dist > 0.0 && t.dist < closest.dist {
                     closest = t;
                 }
-            }
-        } else {
-            // todo: closest first
-            if node.right >= 0 && stack_ptr < 32 {
-                stack[stack_ptr] = node.right;
-                stack_ptr++;
-            }
-            if node.left >= 0 && stack_ptr < 32 {
-                stack[stack_ptr] = node.left;
-                stack_ptr++;
             }
         }
     }

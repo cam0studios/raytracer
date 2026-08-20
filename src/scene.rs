@@ -210,6 +210,7 @@ impl Aabb {
 }
 
 // BVH
+// todo: multiple primitives, count as negative right index
 
 #[derive(Clone, Debug)]
 pub struct Bvh {
@@ -282,26 +283,31 @@ impl Bvh {
         node_id
     }
 
-    pub fn raw(&self) -> [u8; 48] {
-        let mut ret = [0u8; 48];
-        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.aabb.min.to_array()));
-        ret[12..16].copy_from_slice(bytemuck::cast_slice(&[self.left.map_or(-1i32, |left| {
-            i32::try_from(left.0).expect("bvh id exceeds i32")
-        })]));
-        ret[16..28].copy_from_slice(bytemuck::cast_slice(&self.aabb.max.to_array()));
-        ret[28..32].copy_from_slice(bytemuck::cast_slice(&[self.right.map_or(-1i32, |right| {
+    pub fn raw(&self) -> [u8; 32] {
+        let left_or_obj = self.left.map_or_else(
+            || {
+                -(self
+                    .primitive
+                    .expect("bvh must have a primitive or children")
+                    .0 as i32)
+                    - 1
+            },
+            |left| i32::try_from(left.0).expect("bvh id exceeds i32"),
+        );
+
+        let right = self.right.map_or(-1i32, |right| {
             i32::try_from(right.0).expect("bvh id exceeds i32")
-        })]));
-        ret[32..36].copy_from_slice(bytemuck::cast_slice(&[self
-            .primitive
-            .map_or(-1i32, |prim| {
-                i32::try_from(prim.0).expect("primitive id exceeds i32")
-            })]));
-        ret[36..48].copy_from_slice(bytemuck::cast_slice(&[0f32; 3]));
+        });
+
+        let mut ret = [0u8; 32];
+        ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.aabb.min.to_array()));
+        ret[12..16].copy_from_slice(bytemuck::cast_slice(&[left_or_obj]));
+        ret[16..28].copy_from_slice(bytemuck::cast_slice(&self.aabb.max.to_array()));
+        ret[28..32].copy_from_slice(bytemuck::cast_slice(&[right]));
         ret
     }
 
-    pub fn empty_raw() -> [u8; 48] {
+    pub fn empty_raw() -> [u8; 32] {
         Bvh::new().raw()
     }
 
