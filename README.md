@@ -1,5 +1,5 @@
 # @cam0studios/raytracer
-A fairly simple wavefront path tracer built with Rust and WGPU.
+A fairly simple wavefront path tracer built with Rust and WESL (WebGPU Extended Shading Language).
 ## Features
 - Primitives: spheres and triangles
 - Materials: Lambertian (dielectric planned)
