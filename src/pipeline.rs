@@ -5,7 +5,7 @@ use wesl::{StandardResolver, Wesl};
 
 use crate::{
     buffers::BufferManager,
-    scene::{Lambertian, MaterialId, Scene, Sphere},
+    scene::{Lambertian, MaterialId, Scene, Sphere, Triangle},
     window::Context,
 };
 
@@ -47,6 +47,20 @@ impl Pipeline {
                     material: MaterialId(1),
                 }
                 .primitive(),
+                Triangle {
+                    v0: Vec3::new(-0.8, 1.0, 9.0),
+                    v1: Vec3::new(-0.8, -2.0, 9.0),
+                    v2: Vec3::new(-0.5, 1.0, 11.0),
+                    material: MaterialId(2),
+                }
+                .primitive(),
+                Triangle {
+                    v0: Vec3::new(-0.5, -2.0, 11.0),
+                    v1: Vec3::new(-0.8, -2.0, 9.0),
+                    v2: Vec3::new(-0.5, 1.0, 11.0),
+                    material: MaterialId(2),
+                }
+                .primitive(),
             ],
             vec![
                 Lambertian {
@@ -55,6 +69,10 @@ impl Pipeline {
                 .material(),
                 Lambertian {
                     color: Vec3::new(0.2, 0.6, 0.1),
+                }
+                .material(),
+                Lambertian {
+                    color: Vec3::new(1.0, 0.3, 0.3),
                 }
                 .material(),
             ],

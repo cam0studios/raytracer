@@ -42,9 +42,9 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
 
     var rng_state = ray.rng_state;
 
-    if intersection.material < 0 {
+    if intersection.dist < 0 || intersection.dist >= 1e37 {
         calc_termination(id, sky_shade(&ray, intersection, &rng_state));
-    } else if intersection.material >= i32(arrayLength(&materials)) {
+    } else if intersection.material >= arrayLength(&materials) {
         calc_termination(id, unknown_shade(&ray, intersection, &rng_state));
     } else {
         let material = materials[intersection.material];
@@ -87,7 +87,12 @@ fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection, materia
     ray.throughput *= material.datav;
 
     ray.origin += ray.direction * intersection.dist;
-    ray.direction = sample_hemisphere_cosine(rng_state, intersection.normal);
+
+    var normal = intersection.normal;
+    if dot(ray.direction, intersection.normal) > 0 {
+        normal *= -1;
+    }
+    ray.direction = sample_hemisphere_cosine(rng_state, normal);
     // ray.direction = reflect(ray.direction, intersection.normal);
     ray.inv_dir = 1.0 / ray.direction;
 

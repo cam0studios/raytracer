@@ -77,7 +77,10 @@ fn traverse_bvh(ray: Ray) -> Intersection {
 
             let obj = objects[obj_i];
             if obj.kind == 0 {
-                // triangle
+                let t = triangle_intersect(ray, obj);
+                if t.dist > 0.0 && t.dist < closest.dist {
+                    closest = t;
+                }
             } else if obj.kind == 1 {
                 let t = sphere_intersect(ray, obj);
                 if t.dist > 0.0 && t.dist < closest.dist {
@@ -106,6 +109,48 @@ fn aabb_intersect(ray: Ray, aabb: Aabb, t_max: f32) -> f32 {
     return -1.0;
 }
 
+// todo: return f32, calculate normal after?
+
+fn triangle_intersect(ray: Ray, triangle: Object) -> Intersection {
+    let epsilon = 1e-6;
+
+    let a = triangle.origin;
+    let b = triangle.datav;
+    let c = triangle.datam[0].xyz;
+
+    let e1 = b - a;
+    let e2 = c - a;
+
+    let ray_cross_e2 = cross(ray.direction, e2);
+    let det = dot(e1, ray_cross_e2);
+
+    if det > -epsilon && det < epsilon {
+        return intersection_none();
+    }
+
+    let inv_det = 1.0 / det;
+    let s = ray.origin - a;
+    let u = inv_det * dot(s, ray_cross_e2);
+    if u < 0.0 || u > 1.0 {
+        return intersection_none();
+    }
+
+    let s_cross_e1 = cross(s, e1);
+    let v = inv_det * dot(ray.direction, s_cross_e1);
+    if v < 0.0 || u + v > 1.0 {
+        return intersection_none();
+    }
+
+    let t = inv_det * dot(e2, s_cross_e1);
+
+    if t <= epsilon {
+        return intersection_none();
+    }
+
+    let normal = normalize(cross(e1, e2));
+    return Intersection(normal, t, vec3f(0.0, 0.0, 0.0), triangle.material);
+}
+
 fn sphere_intersect(ray: Ray, sphere: Object) -> Intersection {
     let oc = ray.origin - sphere.origin;
     let a = dot(ray.direction, ray.direction);
@@ -129,5 +174,5 @@ fn sphere_intersect(ray: Ray, sphere: Object) -> Intersection {
 
     let normal = normalize(oc + ray.direction * dist);
 
-    return Intersection(normal, dist, vec3f(0.0, 0.0, 0.0), i32(sphere.material));
+    return Intersection(normal, dist, vec3f(0.0, 0.0, 0.0), sphere.material);
 }
