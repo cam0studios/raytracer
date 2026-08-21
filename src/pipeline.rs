@@ -1,5 +1,7 @@
 // wgpu compiling and encoding
 
+use std::time::Instant;
+
 use glam::Vec3;
 use wesl::{StandardResolver, Wesl};
 
@@ -9,7 +11,10 @@ use crate::{
     window::Context,
 };
 
-const CONSTS: Consts = Consts { bounces: 10 };
+const CONSTS: Consts = Consts {
+    bounces: 10,
+    frames: 20,
+};
 
 pub struct Pipeline {
     pub buffers: BufferManager,
@@ -17,6 +22,7 @@ pub struct Pipeline {
     pub pipelines: Pipelines,
     pub bind_group_layouts: BindGroupLayouts,
     pub bind_groups: BindGroups,
+    timer: Option<Instant>,
 }
 impl Pipeline {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
@@ -64,7 +70,7 @@ impl Pipeline {
             ],
             vec![
                 Lambertian {
-                    color: Vec3::new(1.0, 1.0, 1.0),
+                    color: Vec3::new(0.9, 0.9, 0.9),
                 }
                 .material(),
                 Lambertian {
@@ -208,6 +214,7 @@ impl Pipeline {
             pipelines,
             bind_group_layouts,
             bind_groups,
+            timer: None,
         }
     }
 
@@ -221,6 +228,11 @@ impl Pipeline {
 
     // RENDER LOOP
     pub fn render(&mut self, context: &Context) -> anyhow::Result<()> {
+        if let None = self.timer {
+            self.timer = Some(Instant::now());
+        }
+        let timer = self.timer.unwrap();
+
         let output = match context.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
@@ -247,83 +259,85 @@ impl Pipeline {
         self.buffers.vars.bounce = 0;
         self.buffers.write_vars(&context.device, &context.queue);
 
-        // GENERATE PASS
-        let mut generate_encoder =
-            context
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
-        {
-            let mut generate_pass =
-                generate_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: Some("Generate Pass"),
-                    timestamp_writes: None,
-                });
-            generate_pass.set_pipeline(&self.pipelines.generate);
-            generate_pass.set_bind_group(0, &self.bind_groups.generate, &[]);
-            generate_pass.dispatch_workgroups(
-                (self.size.f().0 / 8.0).ceil() as u32,
-                (self.size.f().1 / 8.0).ceil() as u32,
-                1,
-            );
-        }
-        context
-            .queue
-            .submit(std::iter::once(generate_encoder.finish()));
-
-        for bounce in 0..CONSTS.bounces {
-            self.buffers.vars.bounce = bounce;
-            self.buffers.write_vars(&context.device, &context.queue);
-            let mut bounce_encoder =
+        for frame in 0..CONSTS.frames {
+            // GENERATE PASS
+            let mut generate_encoder =
                 context
                     .device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                         label: Some("Render Encoder"),
                     });
-
-            // PREP INDIRECT PASS
             {
-                let mut prep_indirect_pass =
-                    bounce_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                        label: Some("Prep Indirect Pass"),
+                let mut generate_pass =
+                    generate_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some("Generate Pass"),
                         timestamp_writes: None,
                     });
-                prep_indirect_pass.set_pipeline(&self.pipelines.prep_indirect);
-                prep_indirect_pass.set_bind_group(0, &self.bind_groups.prep_indirect, &[]);
-                prep_indirect_pass.dispatch_workgroups(1, 1, 1);
+                generate_pass.set_pipeline(&self.pipelines.generate);
+                generate_pass.set_bind_group(0, &self.bind_groups.generate, &[]);
+                generate_pass.dispatch_workgroups(
+                    (self.size.f().0 / 8.0).ceil() as u32,
+                    (self.size.f().1 / 8.0).ceil() as u32,
+                    1,
+                );
             }
-            // EXTEND PASS
-            {
-                let mut extend_pass =
-                    bounce_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                        label: Some("Extend Pass"),
-                        timestamp_writes: None,
-                    });
-                extend_pass.set_pipeline(&self.pipelines.extend);
-                extend_pass.set_bind_group(0, &self.bind_groups.extend, &[]);
-                extend_pass.dispatch_workgroups_indirect(&self.buffers.active_ray_indirect, 0);
-            }
-            // SHADE PASS
-            {
-                let mut shade_pass =
-                    bounce_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                        label: Some("Shade Pass"),
-                        timestamp_writes: None,
-                    });
-                shade_pass.set_pipeline(&self.pipelines.shade);
-                shade_pass.set_bind_group(0, &self.bind_groups.shade, &[]);
-                shade_pass.dispatch_workgroups_indirect(&self.buffers.active_ray_indirect, 0);
-            }
-            // COMPACT PASS
-            // {}
             context
                 .queue
-                .submit(std::iter::once(bounce_encoder.finish()));
-        }
+                .submit(std::iter::once(generate_encoder.finish()));
 
-        self.buffers.vars.frame += 1;
-        self.buffers.write_vars(&context.device, &context.queue);
+            for bounce in 0..CONSTS.bounces {
+                self.buffers.vars.bounce = bounce;
+                self.buffers.write_vars(&context.device, &context.queue);
+                let mut bounce_encoder =
+                    context
+                        .device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Render Encoder"),
+                        });
+
+                // PREP INDIRECT PASS
+                {
+                    let mut prep_indirect_pass =
+                        bounce_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                            label: Some("Prep Indirect Pass"),
+                            timestamp_writes: None,
+                        });
+                    prep_indirect_pass.set_pipeline(&self.pipelines.prep_indirect);
+                    prep_indirect_pass.set_bind_group(0, &self.bind_groups.prep_indirect, &[]);
+                    prep_indirect_pass.dispatch_workgroups(1, 1, 1);
+                }
+                // EXTEND PASS
+                {
+                    let mut extend_pass =
+                        bounce_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                            label: Some("Extend Pass"),
+                            timestamp_writes: None,
+                        });
+                    extend_pass.set_pipeline(&self.pipelines.extend);
+                    extend_pass.set_bind_group(0, &self.bind_groups.extend, &[]);
+                    extend_pass.dispatch_workgroups_indirect(&self.buffers.active_ray_indirect, 0);
+                }
+                // SHADE PASS
+                {
+                    let mut shade_pass =
+                        bounce_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                            label: Some("Shade Pass"),
+                            timestamp_writes: None,
+                        });
+                    shade_pass.set_pipeline(&self.pipelines.shade);
+                    shade_pass.set_bind_group(0, &self.bind_groups.shade, &[]);
+                    shade_pass.dispatch_workgroups_indirect(&self.buffers.active_ray_indirect, 0);
+                }
+                // COMPACT PASS
+                // {}
+                context
+                    .queue
+                    .submit(std::iter::once(bounce_encoder.finish()));
+            }
+
+            self.buffers.vars.frame += 1;
+            self.buffers.write_vars(&context.device, &context.queue);
+        }
 
         // BLIT PASS
         let mut blit_encoder =
@@ -362,7 +376,18 @@ impl Pipeline {
 
         context.queue.present(output);
 
-        log::info!("frame {}", self.buffers.vars.frame);
+        log::info!(
+            "time: {}:{:02}:{:02}.{:03}, frame {}, {:.2} fps, {:.2} rps",
+            timer.elapsed().as_secs() / 3600,
+            timer.elapsed().as_secs() / 60 % 60,
+            timer.elapsed().as_secs() % 60,
+            timer.elapsed().as_millis() % 1000,
+            self.buffers.vars.frame,
+            (self.buffers.vars.frame as f32)
+                / timer.elapsed().as_secs_f32()
+                / (CONSTS.frames as f32),
+            (self.buffers.vars.frame as f32) / timer.elapsed().as_secs_f32()
+        );
 
         Ok(())
     }
@@ -374,9 +399,10 @@ impl Pipeline {
         self.buffers.vars.frame = 0;
         self.buffers.write_vars(device, queue);
         self.bind_groups = Self::get_bind_groups(&self.bind_group_layouts, &device, &self.buffers);
+        self.timer = Some(Instant::now());
     }
 
-    pub fn get_bind_groups(
+    fn get_bind_groups(
         layouts: &BindGroupLayouts,
         device: &wgpu::Device,
         buffers: &BufferManager,
@@ -527,6 +553,7 @@ impl Pipeline {
 
 pub struct Consts {
     bounces: u32,
+    frames: u32,
 }
 
 #[derive(Debug)]

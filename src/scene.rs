@@ -211,6 +211,7 @@ impl Aabb {
 
 // BVH
 // todo: multiple primitives, count as negative right index
+// todo: separate tlas and blas
 
 #[derive(Clone, Debug)]
 pub struct Bvh {

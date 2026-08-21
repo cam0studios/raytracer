@@ -69,3 +69,5 @@ struct Aabb {
     min: vec3f,
     max: vec3f,
 }
+
+const PI = 3.14159265;

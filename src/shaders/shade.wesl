@@ -1,6 +1,6 @@
 // accumulate shaded values, calculate ray termination and bounces
 
-import super::types::{Vars, Ray, Indirect, Intersection, Material, intersection_none};
+import super::types::{Vars, Ray, Indirect, Intersection, Material, intersection_none, PI};
 import super::sampling::{pcg, sample_hemisphere_cosine};
 
 @group(0) @binding(0)
@@ -52,10 +52,11 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
         calc_termination(id, &ray, unknown_shade(&ray, intersection, &rng_state));
     } else {
         let material = materials[intersection.material];
-        if material.kind == 0 {
-            calc_termination(id, &ray, lambertian_shade(&ray, intersection, material, &rng_state));
-        } else {
+        if material.kind == 1000 {
+            // example non brdf material
             calc_termination(id, &ray, unknown_shade(&ray, intersection, &rng_state));
+        } else {
+            calc_termination(id, &ray, brdf_shade(&ray, intersection, material, &rng_state));
         }
     }
 
@@ -65,9 +66,10 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
 
 // materials
 
-// const sun_dir = normalize(vec3f(0.25, -0.01, 1.0));
-const sun_dir = normalize(vec3f(0.25, -1.0, -0.25));
+const sun_dir = normalize(vec3f(0.4, -0.01, 1.0));
+// const sun_dir = normalize(vec3f(0.25, -1.0, -0.25));
 
+// todo: ocean as physical intersection?
 fn ocean_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> ShadeOut {
     let f0 = 0.02;
     var fresnel = f0;
@@ -135,7 +137,7 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     let day_weight = pow(smoothstep(0.0, 1.0, sun_height), 0.9);
 
     // config
-    let day_sun /*         */ = vec3f(38000.0, 36500.0, 35000.0);
+    let day_sun /*         */ = vec3f(19000.0, 18200.0, 17500.0);
     let day_horizon_far /* */ = vec3f(0.5, 0.7, 1.0);
     let day_horizon_near /**/ = vec3f(0.85, 0.9, 0.9);
     let day_zenith /*      */ = vec3f(0.04, 0.16, 0.45);
@@ -145,7 +147,7 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     let day_glow_scale /*        */ = 0.12;
     let day_glow_modifier /*     */ = 1.2;
 
-    let sunset_sun /*         */ = vec3f(8000.0, 5000.0, 500.0);
+    let sunset_sun /*         */ = vec3f(4000.0, 2500.0, 250.0);
     let sunset_horizon_far /* */ = vec3f(0.9, 0.2, 0.08);
     let sunset_horizon_near /**/ = vec3f(2.5, 0.8, 0.1);
     let sunset_zenith /*      */ = vec3f(0.1, 0.15, 0.25);
@@ -186,7 +188,7 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     let sun_azimuth_weight /**/ = pow(clamp(sun_dot * 0.5 + 0.5, 0.0, 1.0), horizon_pow);
     let base_horizon /**/ = mix(horizon_far_col, horizon_near_col, sun_azimuth_weight);
 
-    let sky_altitude /*      */ = asin(clamp(-ray.direction.y, 0.0, 1.0)) / (3.14159265 / 2.0);
+    let sky_altitude /*      */ = asin(clamp(-ray.direction.y, 0.0, 1.0)) / (PI / 2.0);
     let altitude_weight /*   */ = pow(sky_altitude, zenith_pow);
 
     var col = mix(base_horizon, zenith_col, altitude_weight);
@@ -200,7 +202,7 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
         let g2 = g * g;
         let d_num = 1.0 - g2;
         let d_den = 1.0 + g2 - 2.0 * g * sun_dot;
-        let result = d_num / (12.5663706 * pow(max(d_den, 0.0001), 1.5));
+        let result = d_num / (2.0 * PI * pow(max(d_den, 0.0001), 1.5));
 
         let horizon_fade = smoothstep(-0.1, 0.1, sun_height);
         let glow_factor = result * glow_scale * horizon_fade;
@@ -221,25 +223,74 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     return ShadeOut(col, true);
 }
 
-fn lambertian_shade(ray: ptr<function, Ray>, intersection: Intersection, material: Material, rng_state: ptr<function, u32>) -> ShadeOut {
-    // let dot = -dot(ray.direction, intersection.normal);
-    // col *= dot;
+struct MaterialSample {
+    wi: vec3f,
+    pdf: f32,
+    weight: vec3f,
+    is_specular: bool,
+}
+fn brdf_shade(ray: ptr<function, Ray>, intersection: Intersection, material: Material, rng_state: ptr<function, u32>) -> ShadeOut {
+    let wo = -ray.direction;
 
-    ray.throughput *= material.datav;
+    var normal = intersection.normal;
+    if dot(ray.direction, normal) > 0.0 {
+        normal = -normal;
+    }
 
     ray.origin += ray.direction * intersection.dist;
 
-    var normal = intersection.normal;
-    if dot(ray.direction, intersection.normal) > 0 {
-        normal *= -1;
+    var sample: MaterialSample;
+    if material.kind == 0 {
+        sample = lambertian_brdf_sample(wo, normal, material, rng_state);
+    } else {
+        return unknown_shade(ray, intersection, rng_state);
     }
-    ray.direction = sample_hemisphere_cosine(rng_state, normal);
-    // ray.direction = reflect(ray.direction, intersection.normal);
+    if sample.pdf <= 0.0 {
+        return ShadeOut(vec3f(0.0), true);
+    }
+
+    ray.direction = sample.wi;
     ray.inv_dir = 1.0 / ray.direction;
 
-    ray.origin += ray.direction * 1e-4; // todo: replace with threshold and data stored for next frame
+    ray.throughput *= sample.weight;
+    ray.origin += ray.direction * 1e-4;
 
     return ShadeOut(vec3f(0.0), false);
+}
+
+fn lambertian_brdf_eval(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) -> vec3f {
+    let cos_theta = dot(wi, normal);
+
+    if cos_theta <= 0.0 || dot(wo, normal) <= 0.0 {
+        return vec3f(0.0);
+    }
+
+    return material.datav * (1.0 / PI);
+}
+fn lambertian_brdf_sample(wo: vec3f, normal: vec3f, material: Material, rng_state: ptr<function, u32>) -> MaterialSample {
+    var result: MaterialSample;
+
+    let wi = sample_hemisphere_cosine(rng_state, normal);
+    result.wi = wi;
+    result.pdf = lambertian_pdf(wo, wi, normal, material);
+
+    if result.pdf > 0.0 {
+        // ( (albedo/pi) * cos_theta ) / (cos_theta/pi) = albedo
+        result.weight = material.datav;
+    } else {
+        result.weight = vec3f(0.0);
+    }
+
+    return result;
+}
+fn lambertian_pdf(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) -> f32 {
+    let cos_theta = dot(wi, normal);
+
+    if cos_theta <= 0.0 || dot(wo, normal) <= 0.0 {
+        return 0.0;
+    }
+
+    return cos_theta * (1.0 / PI);
 }
 
 fn unknown_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> ShadeOut {
@@ -250,25 +301,20 @@ fn unknown_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state:
         col = vec3f(0.5, 0.0, 0.7);
     }
 
-    out(*ray, col);
     return ShadeOut(col, true);
 }
 
 // shading utils
 
-fn out(ray: Ray, col: vec3f) {
-    let out_col = col * ray.throughput;
-    if col.x != col.x || col.y != col.y || col.z != col.z {
-        return;
+fn calc_termination(id: u32, ray: ptr<function, Ray>, shade_out: ShadeOut) {
+    let col = shade_out.col * ray.throughput;
+    if col.x == col.x && col.y == col.y && col.z == col.z {
+        let coord = vec2u(u32(ray.pixel_x), u32(ray.pixel_y));
+        textureStore(output, coord, textureLoad(output, coord) + vec4f(col, 1.0));
     }
 
-    let coord = vec2u(u32(ray.pixel_x), u32(ray.pixel_y));
-    textureStore(output, coord, textureLoad(output, coord) + vec4f(out_col, 1.0));
-}
-fn calc_termination(id: u32, ray: ptr<function, Ray>, shade_out: ShadeOut) {
     if shade_out.terminate {
         active_rays[id] = 0u;
-        out(*ray, shade_out.col);
         atomicAdd(&active_ray_counter, 1); // temp while compaction doesn't exist
     } else {
         atomicAdd(&active_ray_counter, 1); // todo: speed up
@@ -289,25 +335,25 @@ struct WaveParameters {
     speed: f32,
 }
 
-// const WAVE_COUNT: u32 = 6;
-// const WAVES = array<WaveParameters, 6>(
-//     WaveParameters(vec2f(-0.3, -0.65), 0.22, 67.0, 3.5),
-//     WaveParameters(vec2f(0.85, 0.45), 0.18, 35.0, 2.5),
-//     WaveParameters(vec2f(-0.65, 0.65), 0.15, 18.0, 1.8),
-//     WaveParameters(vec2f(0.20, -0.90), 0.12, 8.0, 1.2),
-//     WaveParameters(vec2f(0.88, -0.30), 0.08, 3.5, 0.7),
-//     WaveParameters(vec2f(0.75, 0.55), 0.05, 1.8, 0.4)
-// );
-
 const WAVE_COUNT: u32 = 6;
 const WAVES = array<WaveParameters, 6>(
-    WaveParameters(vec2f(-0.2, -0.6), 0.2, 67.0, 3.5),
-    WaveParameters(vec2f(0.89, 0.45), 0.25, 35.0, 2.5),
-    WaveParameters(vec2f(-0.7, 0.71), 0.30, 18.0, 1.8),
-    WaveParameters(vec2f(0.15, -0.98), 0.35, 8.0, 1.2),
-    WaveParameters(vec2f(0.92, -0.38), 0.40, 3.5, 0.7),
-    WaveParameters(vec2f(0.8, 0.6), 0.42, 1.8, 0.4),
+    WaveParameters(vec2f(-0.3, -0.65), 0.22, 67.0, 3.5),
+    WaveParameters(vec2f(0.85, 0.45), 0.18, 35.0, 2.5),
+    WaveParameters(vec2f(-0.65, 0.65), 0.15, 18.0, 1.8),
+    WaveParameters(vec2f(0.20, -0.90), 0.12, 8.0, 1.2),
+    WaveParameters(vec2f(0.88, -0.30), 0.08, 3.5, 0.7),
+    WaveParameters(vec2f(0.75, 0.55), 0.05, 1.8, 0.4)
 );
+
+// const WAVE_COUNT: u32 = 6;
+// const WAVES = array<WaveParameters, 6>(
+//     WaveParameters(vec2f(-0.2, -0.6), 0.2, 67.0, 3.5),
+//     WaveParameters(vec2f(0.89, 0.45), 0.25, 35.0, 2.5),
+//     WaveParameters(vec2f(-0.7, 0.71), 0.30, 18.0, 1.8),
+//     WaveParameters(vec2f(0.15, -0.98), 0.35, 8.0, 1.2),
+//     WaveParameters(vec2f(0.92, -0.38), 0.40, 3.5, 0.7),
+//     WaveParameters(vec2f(0.8, 0.6), 0.42, 1.8, 0.4),
+// );
 const WAVE_MAX_AMPLITUDE = 4.0;
 
 fn get_wave_normal(position: vec2f, time: f32) -> vec3f {
@@ -325,7 +371,7 @@ fn get_wave_normal(position: vec2f, time: f32) -> vec3f {
         let wave = WAVES[i];
         let d = normalize(wave.direction);
 
-        let k = 2.0 * 3.14159265 / wave.wavelength;
+        let k = 2.0 * PI / wave.wavelength;
         let c = sqrt(gravity / k) * wave.speed;
         let phase = k * (dot(d, distorted) - c * time);
 
@@ -361,7 +407,7 @@ fn get_wave_height(position: vec2f, time: f32) -> f32 {
         let wave = WAVES[i];
         let d = normalize(wave.direction);
 
-        let k = 2.0 * 3.14159265 / wave.wavelength;
+        let k = 2.0 * PI / wave.wavelength;
         let c = sqrt(gravity / k) * wave.speed;
         let phase = k * (dot(d, distorted) - c * time);
 

@@ -33,9 +33,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let inv_frame = 1 / f32(vars.frame);
     var col = textureLoad(output, vec2i(in.position.xy)).xyz * inv_frame;
 
+    // day: -0.5, sunset: 0.5
+    col *= exp2(-0.5);
     col = tone_map_aces(col);
-    // col = tone_map_reinhard(col);
-    // col = tone_map_exposure(col, 0.5);
 
     return vec4f(col, 1.0);
 }
