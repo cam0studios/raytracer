@@ -68,19 +68,15 @@ impl Pipeline {
                 }
                 .material(),
                 Lambertian {
-                    color: Vec3::new(0.2, 0.6, 0.1),
+                    color: Vec3::new(0.15, 0.6, 0.05),
                 }
                 .material(),
                 Lambertian {
-                    color: Vec3::new(1.0, 0.3, 0.3),
+                    color: Vec3::new(1.0, 0.1, 0.1),
                 }
                 .material(),
             ],
         );
-
-        println!("{:?}", scene.bvhs[0].with_context(&scene));
-        println!("{:?}", scene.bvhs[0]);
-        println!("{:?}", scene.bvhs[1]);
 
         let buffers = BufferManager::new(device, config, &scene);
 

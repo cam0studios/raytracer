@@ -7,7 +7,6 @@ mod window;
 
 fn main() {
     env_logger::init();
-    scene::test();
     let _window_manager = window::WindowManager::new();
 }
 

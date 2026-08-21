@@ -60,7 +60,3 @@ fn sample_hemisphere_cosine(state: ptr<function, u32>, normal: vec3f) -> vec3f {
 
     return normalize(tangent * local_dir.x + bitangent * local_dir.y + normal * local_dir.z);
 }
-
-fn lerp_3f(a: vec3f, b: vec3f, t: f32) -> vec3f {
-    return a * (1 - t) + b * t;
-}

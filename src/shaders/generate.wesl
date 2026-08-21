@@ -33,7 +33,9 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     ray.throughput = vec3f(1.0, 1.0, 1.0);
     ray.pixel_x = coords.x;
     ray.pixel_y = coords.y;
+    // todo: add camera rotation/positioning
     ray.direction = normalize(vec3f((f32(coords.x) - fsize.x / 2) / fsize.y, (f32(coords.y) - fsize.y / 2) / fsize.y, 2.0));
+    // ray.direction = normalize(vec3f((f32(coords.x) - fsize.x / 2) / fsize.y, -1.0, (f32(coords.y) - fsize.y / 2) / fsize.y));
     ray.inv_dir = 1.0 / ray.direction;
     ray.rng_state = ray_seed(u32(coords.x), u32(coords.y), vars.frame, 1);
 
