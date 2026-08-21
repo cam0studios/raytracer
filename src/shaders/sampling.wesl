@@ -34,6 +34,18 @@ fn pcg_2f(state: ptr<function, u32>) -> vec2f {
     return vec2f(u, v);
 }
 
+fn local_to_world(dir: vec3f, normal: vec3f) -> vec3f {
+    var tangent = vec3f(0.0, 1.0, 0.0);
+    if abs(normal.z) < 0.999 {
+        tangent = normalize(cross(normal, vec3f(0.0, 0.0, 1.0)));
+    } else {
+        tangent = normalize(cross(normal, vec3f(1.0, 0.0, 0.0)));
+    }
+    let bitangent = cross(normal, tangent);
+
+    return normalize(tangent * dir.x + bitangent * dir.y + normal * dir.z);
+}
+
 fn sample_local_hemisphere_cosine(state: ptr<function, u32>) -> vec3f {
     let r = pcg_2f(state);
 
@@ -49,14 +61,23 @@ fn sample_local_hemisphere_cosine(state: ptr<function, u32>) -> vec3f {
 }
 fn sample_hemisphere_cosine(state: ptr<function, u32>, normal: vec3f) -> vec3f {
     let local_dir = sample_local_hemisphere_cosine(state);
+    return normalize(local_to_world(local_dir, normal));
+}
 
-    var tangent = vec3f(0.0, 1.0, 0.0);
-    if abs(normal.z) < 0.999 {
-        tangent = normalize(cross(normal, vec3f(0.0, 0.0, 1.0)));
-    } else {
-        tangent = normalize(cross(normal, vec3f(1.0, 0.0, 0.0)));
-    }
-    let bitangent = cross(normal, tangent);
+fn sample_local_cone(max_cos: f32, state: ptr<function, u32>) -> vec3f {
+    let r = pcg_2f(state);
 
-    return normalize(tangent * local_dir.x + bitangent * local_dir.y + normal * local_dir.z);
+    let phi = 6.28318530718 * r.x;
+    let cos_theta = (1.0 - r.y) + r.y * max_cos;
+    let sin_theta = sqrt(max(0.0, 1.0 - cos_theta * cos_theta));
+
+    return vec3f(
+        sin_theta * cos(phi),
+        sin_theta * sin(phi),
+        cos_theta
+    );
+}
+fn sample_cone(state: ptr<function, u32>, normal: vec3f, max_cos: f32) -> vec3f {
+    let local_dir = sample_local_cone(max_cos, state);
+    return normalize(local_to_world(local_dir, normal));
 }

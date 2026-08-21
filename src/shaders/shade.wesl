@@ -1,7 +1,7 @@
 // accumulate shaded values, calculate ray termination and bounces
 
 import super::types::{Vars, Ray, Indirect, Intersection, Material, intersection_none, PI};
-import super::sampling::{pcg, sample_hemisphere_cosine};
+import super::sampling::{pcg, pcg_f, sample_hemisphere_cosine, sample_cone};
 
 @group(0) @binding(0)
 var<uniform> vars: Vars;
@@ -68,6 +68,8 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
 
 const sun_dir = normalize(vec3f(0.4, -0.01, 1.0));
 // const sun_dir = normalize(vec3f(0.25, -1.0, -0.25));
+const sun_max: f32 = 0.999966;
+const sun_solid: f32 = 2.0 * PI * (1.0 - sun_max);
 
 // todo: ocean as physical intersection?
 fn ocean_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> ShadeOut {
@@ -117,10 +119,6 @@ fn ocean_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: p
             if ray.direction.y > -0.0001 {
                 ray.direction.y = -0.0001;
                 ray.direction = normalize(ray.direction);
-            }
-
-            if height_factor >= 1 {
-                // return ShadeOut(vec3f(1.0, 0.0, 0.0), true);
             }
         }
     }
@@ -213,9 +211,9 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     }
 
     // sun disk
-    if sun_height > -0.05 && sun_dot > 0.999966 {
+    if sun_height > -0.05 && sun_dot > sun_max {
         let sun_visibility = smoothstep(-0.05, 0.05, sun_height);
-        let sun_mask = smoothstep(0.999966, 0.99997, sun_dot);
+        let sun_mask = smoothstep(sun_max, mix(sun_max, 1.0, 0.2), sun_dot);
 
         col = mix(col, sun_col, sun_visibility * sun_mask);
     }
@@ -270,13 +268,24 @@ fn lambertian_brdf_eval(wo: vec3f, wi: vec3f, normal: vec3f, material: Material)
 fn lambertian_brdf_sample(wo: vec3f, normal: vec3f, material: Material, rng_state: ptr<function, u32>) -> MaterialSample {
     var result: MaterialSample;
 
-    let wi = sample_hemisphere_cosine(rng_state, normal);
-    result.wi = wi;
-    result.pdf = lambertian_pdf(wo, wi, normal, material);
+    let sample_sun_chance = 0.5;
+    let sample_sun = pcg_f(rng_state) < sample_sun_chance; // configurable
+
+    if sample_sun {
+        result.wi = sample_cone(rng_state, sun_dir, sun_max);
+    } else {
+        result.wi = sample_hemisphere_cosine(rng_state, normal);
+    }
+
+    let lambertian_pdf = lambertian_pdf(wo, result.wi, normal, material);
+    let sun_pdf = sun_pdf(wo, result.wi, normal);
+    result.pdf = mix(lambertian_pdf, sun_pdf, sample_sun_chance);
 
     if result.pdf > 0.0 {
-        // ( (albedo/pi) * cos_theta ) / (cos_theta/pi) = albedo
-        result.weight = material.datav;
+        // non importance sampled: ( (albedo/pi) * cos_theta ) / (cos_theta/pi) = albedo
+        // result.weight = material.datav;
+        let eval = lambertian_brdf_eval(wo, result.wi, normal, material);
+        result.weight = (eval * dot(result.wi, normal)) / result.pdf;
     } else {
         result.weight = vec3f(0.0);
     }
@@ -291,6 +300,13 @@ fn lambertian_pdf(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) -> f3
     }
 
     return cos_theta * (1.0 / PI);
+}
+fn sun_pdf(wo: vec3f, wi: vec3f, normal: vec3f) -> f32 {
+    if dot(wi, sun_dir) >= sun_max && dot(wi, normal) > 0.0 {
+        return 1.0 / sun_solid;
+    }
+
+    return 0.0;
 }
 
 fn unknown_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> ShadeOut {
