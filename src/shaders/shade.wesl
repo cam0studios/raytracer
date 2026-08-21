@@ -1,6 +1,6 @@
 // accumulate shaded values, calculate ray termination and bounces
 
-import super::types::{Vars, Ray, Indirect, Intersection, Material};
+import super::types::{Vars, Ray, Indirect, Intersection, Material, intersection_none};
 import super::sampling::{pcg, sample_hemisphere_cosine};
 
 @group(0) @binding(0)
@@ -65,21 +65,64 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
 
 // materials
 
+// const sun_dir = normalize(vec3f(0.25, -0.01, 1.0));
+const sun_dir = normalize(vec3f(0.25, -1.0, -0.25));
+
 fn ocean_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> ShadeOut {
     let f0 = 0.02;
-    let fresnel = f0 + (1 - f0) * pow(1 - ray.direction.y, 5.0);
+    var fresnel = f0;
 
-    // if ray.direction.y > 0.0001 {
-    //     let ocean_height = -10;
+    let sun_height = -sun_dir.y;
+    let night_weight = clamp(-sun_height / 0.2, 0.0, 1.0);
+    var absorb_col = mix(vec3f(0.005, 0.015, 0.03), vec3f(0.0), night_weight);
 
-    //     let t = (-10 - ray.origin.y) / ray.direction.y;
-    //     let pos = ray.origin + ray.direction * t;
+    if ray.direction.y > 0.0001 {
+        let ocean_height = 20.0;
+        let time = 0.0;
 
-    //     ray.direction = normalize(ray.direction);
-    // }
-    ray.direction.y *= -1;
+        // position stored in normal property
+        let ocean_hit = intersect_ocean(ray, ocean_height, time);
 
-    let absorb_col = vec3f(0.005, 0.015, 0.03);
+        if ocean_hit.dist > 0.0 {
+            var normal = get_wave_normal(ocean_hit.normal.xz, 0.0);
+            normal.y = -abs(normal.y);
+
+            let view_dir_flat = normalize(ray.direction.xz);
+            let view_tangent_flat = vec2f(-view_dir_flat.y, view_dir_flat.x);
+            let slope_along_view = dot(normal.xz, view_dir_flat);
+            let slope_cross_view = dot(normal.xz, view_tangent_flat);
+
+            let distance_scale = 1.0 - 1.0 / (ocean_hit.dist * 0.0004 + 1.0);
+
+            let filtered_cross = mix(slope_cross_view, 0.0, distance_scale);
+            let filtered_along = mix(slope_along_view, slope_along_view * 0.4, distance_scale);
+
+            normal.x = view_dir_flat.x * filtered_along + view_tangent_flat.x * filtered_cross;
+            normal.z = view_dir_flat.y * filtered_along + view_tangent_flat.y * filtered_cross;
+            normal = normalize(normal);
+
+            let local_height = get_wave_height(ocean_hit.normal.xz, time);
+
+            let height_factor = clamp(local_height / WAVE_MAX_AMPLITUDE, 0.0, 1.0);
+            absorb_col = mix(absorb_col * 0.25, absorb_col, pow(height_factor, 2.0));
+
+            let dot = max(dot(-ray.direction, normal), 0.0);
+            let exponent = mix(2.0, 5.0, height_factor);
+            fresnel = f0 + (1 - f0) * pow(1 - dot, exponent);
+
+            ray.direction = reflect(ray.direction, normal);
+
+            if ray.direction.y > -0.0001 {
+                ray.direction.y = -0.0001;
+                ray.direction = normalize(ray.direction);
+            }
+
+            if height_factor >= 1 {
+                // return ShadeOut(vec3f(1.0, 0.0, 0.0), true);
+            }
+        }
+    }
+
     let sky_col = sky_shade(ray, intersection, rng_state).col;
 
     let col = mix(absorb_col, sky_col, fresnel);
@@ -88,32 +131,29 @@ fn ocean_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: p
 }
 
 fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr<function, u32>) -> ShadeOut {
-    let sun_dir = normalize(vec3f(0.25, -0.02, 1.0));
-    // let sun_dir = normalize(vec3f(0.25, -1.0, 0.5));
-
     let sun_height = -sun_dir.y;
-    let day_weight = clamp(sun_height, 0.0, 1.0);
+    let day_weight = pow(smoothstep(0.0, 1.0, sun_height), 0.9);
 
     // config
-    let day_sun /*         */ = vec3f(200.0, 190.0, 170.0);
+    let day_sun /*         */ = vec3f(38000.0, 36500.0, 35000.0);
     let day_horizon_far /* */ = vec3f(0.5, 0.7, 1.0);
     let day_horizon_near /**/ = vec3f(0.85, 0.9, 0.9);
-    let day_zenith /*      */ = vec3f(0.02, 0.11, 0.38);
+    let day_zenith /*      */ = vec3f(0.04, 0.16, 0.45);
     let day_horizon_pow /*       */ = 3.0;
     let day_zenith_pow /*        */ = 0.25;
     let day_glow_g /*            */ = 0.88;
     let day_glow_scale /*        */ = 0.12;
     let day_glow_modifier /*     */ = 1.2;
 
-    let sunset_sun /*         */ = vec3f(150.0, 40.0, 5.0);
-    let sunset_horizon_far /* */ = vec3f(0.08, 0.04, 0.08);
+    let sunset_sun /*         */ = vec3f(8000.0, 5000.0, 500.0);
+    let sunset_horizon_far /* */ = vec3f(0.9, 0.2, 0.08);
     let sunset_horizon_near /**/ = vec3f(2.5, 0.8, 0.1);
-    let sunset_zenith /*      */ = vec3f(0.005, 0.01, 0.04);
+    let sunset_zenith /*      */ = vec3f(0.1, 0.15, 0.25);
     let sunset_horizon_pow /*       */ = 3.0;
-    let sunset_zenith_pow /*        */ = 0.8;
-    let sunset_glow_g /*            */ = 0.60;
-    let sunset_glow_scale /*        */ = 0.35;
-    let sunset_glow_modifier /*     */ = 2.5;
+    let sunset_zenith_pow /*        */ = 0.7;
+    let sunset_glow_g /*            */ = 0.70;
+    let sunset_glow_scale /*        */ = 0.45;
+    let sunset_glow_modifier /*     */ = 2.8;
 
     let night_horizon /* */ = vec3f(0.001, 0.0015, 0.005);
     let night_zenith /*  */ = vec3f(0.0002, 0.0004, 0.0015);
@@ -171,9 +211,9 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     }
 
     // sun disk
-    if sun_height > -0.05 && sun_dot > 0.998 {
+    if sun_height > -0.05 && sun_dot > 0.999966 {
         let sun_visibility = smoothstep(-0.05, 0.05, sun_height);
-        let sun_mask = smoothstep(0.998, 0.9985, sun_dot);
+        let sun_mask = smoothstep(0.999966, 0.99997, sun_dot);
 
         col = mix(col, sun_col, sun_visibility * sun_mask);
     }
@@ -214,7 +254,7 @@ fn unknown_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state:
     return ShadeOut(col, true);
 }
 
-// utils
+// shading utils
 
 fn out(ray: Ray, col: vec3f) {
     let out_col = col * ray.throughput;
@@ -238,4 +278,166 @@ fn calc_termination(id: u32, ray: ptr<function, Ray>, shade_out: ShadeOut) {
 struct ShadeOut {
     col: vec3f,
     terminate: bool,
+}
+
+// ocean waves
+
+struct WaveParameters {
+    direction: vec2f,
+    steepness: f32,
+    wavelength: f32,
+    speed: f32,
+}
+
+// const WAVE_COUNT: u32 = 6;
+// const WAVES = array<WaveParameters, 6>(
+//     WaveParameters(vec2f(-0.3, -0.65), 0.22, 67.0, 3.5),
+//     WaveParameters(vec2f(0.85, 0.45), 0.18, 35.0, 2.5),
+//     WaveParameters(vec2f(-0.65, 0.65), 0.15, 18.0, 1.8),
+//     WaveParameters(vec2f(0.20, -0.90), 0.12, 8.0, 1.2),
+//     WaveParameters(vec2f(0.88, -0.30), 0.08, 3.5, 0.7),
+//     WaveParameters(vec2f(0.75, 0.55), 0.05, 1.8, 0.4)
+// );
+
+const WAVE_COUNT: u32 = 6;
+const WAVES = array<WaveParameters, 6>(
+    WaveParameters(vec2f(-0.2, -0.6), 0.2, 67.0, 3.5),
+    WaveParameters(vec2f(0.89, 0.45), 0.25, 35.0, 2.5),
+    WaveParameters(vec2f(-0.7, 0.71), 0.30, 18.0, 1.8),
+    WaveParameters(vec2f(0.15, -0.98), 0.35, 8.0, 1.2),
+    WaveParameters(vec2f(0.92, -0.38), 0.40, 3.5, 0.7),
+    WaveParameters(vec2f(0.8, 0.6), 0.42, 1.8, 0.4),
+);
+const WAVE_MAX_AMPLITUDE = 4.0;
+
+fn get_wave_normal(position: vec2f, time: f32) -> vec3f {
+    let distort_x = sin(position.y * 0.1 + time * 0.5) * 1.5;
+    let distort_y = cos(position.x * 0.1 + time * 0.4) * 1.5;
+    let distorted = position + vec2f(distort_x, distort_y);
+
+    var tangent = vec3f(1.0, 0.0, 0.0);
+    var binormal = vec3f(0.0, 0.0, 1.0);
+    var displaced_pos = vec3f(distorted.x, 0.0, distorted.y);
+
+    let gravity = 9.81;
+
+    for (var i = 0u; i < WAVE_COUNT; i++) {
+        let wave = WAVES[i];
+        let d = normalize(wave.direction);
+
+        let k = 2.0 * 3.14159265 / wave.wavelength;
+        let c = sqrt(gravity / k) * wave.speed;
+        let phase = k * (dot(d, distorted) - c * time);
+
+        let sin_p = sin(phase);
+        let base_val = sin_p * 0.5 + 0.5;
+
+        let sharp_derivative = 1.5 * pow(max(base_val, 0.0), 0.5) * 0.5;
+
+        let cos_p = cos(phase) * sharp_derivative;
+
+        let a = wave.steepness / k;
+
+        tangent.x -= d.x * d.x * wave.steepness * sin_p;
+        tangent.y += d.x * wave.steepness * cos_p;
+        tangent.z -= d.x * d.y * wave.steepness * sin_p;
+
+        binormal.x -= d.x * d.y * wave.steepness * sin_p;
+        binormal.y += d.y * wave.steepness * cos_p;
+        binormal.z -= d.y * d.y * wave.steepness * sin_p;
+    }
+
+    return normalize(cross(binormal, tangent));
+}
+
+fn get_wave_height(position: vec2f, time: f32) -> f32 {
+    let distort_x = sin(position.y * 0.1 + time * 0.5) * 1.5;
+    let distort_y = cos(position.x * 0.1 + time * 0.4) * 1.5;
+    let distorted = position + vec2f(distort_x, distort_y);
+
+    var height = 0.0;
+    let gravity = 9.81;
+    for (var i = 0u; i < WAVE_COUNT; i++) {
+        let wave = WAVES[i];
+        let d = normalize(wave.direction);
+
+        let k = 2.0 * 3.14159265 / wave.wavelength;
+        let c = sqrt(gravity / k) * wave.speed;
+        let phase = k * (dot(d, distorted) - c * time);
+
+        let sharp_factor = pow(sin(phase) * 0.5 + 0.5, 1.5);
+        height += (wave.steepness / k) * sharp_factor;
+    }
+
+    return height;
+}
+
+fn intersect_ocean(ray: ptr<function, Ray>, base_height: f32, time: f32) -> Intersection {
+    var result = intersection_none();
+    // position stored in normal property
+    result.normal = ray.origin;
+
+    let t_top = (base_height - WAVE_MAX_AMPLITUDE - ray.origin.y) / ray.direction.y;
+    let t_bottom = (base_height - ray.origin.y) / ray.direction.y;
+
+    let t_start = max(0.0, min(t_top, t_bottom));
+    var t_end = max(t_bottom, t_top);
+
+    let MAX_SEARCH_DIST = 400.0;
+    if (t_end - t_start) > MAX_SEARCH_DIST {
+        t_end = t_start + MAX_SEARCH_DIST;
+    }
+
+    if t_start > t_end {
+        return result;
+    }
+
+    const LINEAR_STEPS = 12u;
+    var t_current = t_start;
+    let step_size = (t_end - t_start) / f32(LINEAR_STEPS);
+
+    var t_prev = t_start;
+
+    for (var i = 0u; i < LINEAR_STEPS; i++) {
+        t_current = t_start + f32(i) * step_size;
+        let p = ray.origin + ray.direction * t_current;
+        let h = base_height - get_wave_height(p.xz, time);
+
+        if p.y > h {
+            result.dist = 1.0;
+            break;
+        }
+        t_prev = t_current;
+    }
+
+    if result.dist < 0 && t_end >= t_bottom {
+        let t_flat = (base_height - ray.origin.y) / ray.direction.y;
+        if t_flat > 0.0 {
+            result.dist = t_flat;
+            result.normal = ray.origin + ray.direction * t_flat;
+            return result;
+        }
+    }
+
+    if result.dist > 0 {
+        var t_min = t_prev;
+        var t_max = t_current;
+
+        const BINARY_STEPS = 5u;
+        for (var j = 0u; j < BINARY_STEPS; j++) {
+            let t_mid = mix(t_min, t_max, 0.5);
+            let p = ray.origin + ray.direction * t_mid;
+            let h = base_height - get_wave_height(p.xz, time);
+
+            if p.y > h {
+                t_max = t_mid;
+            } else {
+                t_min = t_mid;
+            }
+        }
+        result.dist = mix(t_min, t_max, 0.5);
+        result.normal = ray.origin + ray.direction * result.dist;
+    }
+
+    return result;
 }

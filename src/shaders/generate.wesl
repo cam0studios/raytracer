@@ -1,7 +1,7 @@
 // camera ray generation
 
 import super::types::{Vars, Ray, Indirect};
-import super::sampling::ray_seed;
+import super::sampling::{ray_seed, pcg_2f};
 
 // requires readonly_and_readwrite_storage_textures;
 
@@ -34,10 +34,15 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     ray.pixel_x = coords.x;
     ray.pixel_y = coords.y;
     // todo: add camera rotation/positioning
-    ray.direction = normalize(vec3f((f32(coords.x) - fsize.x / 2) / fsize.y, (f32(coords.y) - fsize.y / 2) / fsize.y, 2.0));
-    // ray.direction = normalize(vec3f((f32(coords.x) - fsize.x / 2) / fsize.y, -1.0, (f32(coords.y) - fsize.y / 2) / fsize.y));
+
+    var rng_state = ray_seed(u32(coords.x), u32(coords.y), vars.frame, 1);
+
+    let offset = pcg_2f(&rng_state);
+
+    ray.direction = normalize(vec3f((f32(coords.x) + offset.x - fsize.x / 2) / fsize.y, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y - 0.25, 1.5));
+    // ray.direction = normalize(vec3f((f32(coords.x) + offset.x - fsize.x / 2) / fsize.y, -1.5, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y));
     ray.inv_dir = 1.0 / ray.direction;
-    ray.rng_state = ray_seed(u32(coords.x), u32(coords.y), vars.frame, 1);
+    ray.rng_state = rng_state;
 
     rays[id] = ray;
     active_rays[id] = 1u;
