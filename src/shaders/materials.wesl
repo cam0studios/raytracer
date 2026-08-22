@@ -22,7 +22,7 @@ fn brdf_shade(ray: ptr<function, Ray>, intersection: Intersection, material: Mat
 
     var sample: MaterialSample;
     if material.kind == 0 {
-        sample = lambertian_brdf_sample(wo, normal, material, rng_state);
+        sample = lambertian_brdf_sample(wo, normal, lambertian(material), rng_state);
     } else {
         return unknown_shade(ray, intersection, rng_state);
     }
@@ -41,17 +41,23 @@ fn brdf_shade(ray: ptr<function, Ray>, intersection: Intersection, material: Mat
 
 // LAMBERTIAN
 
-// todo: full mis (two separate brdfs and pdfs, then combine using balance/power heuristic)
-fn lambertian_brdf_eval(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) -> vec3f {
+struct Lambertian {
+    albedo: vec3f,
+}
+fn lambertian(material: Material) -> Lambertian {
+    return Lambertian(material.datav);
+}
+// todo: full mis (two separate brdfs and pdfs, then combine using balance/power heuristic)?
+fn lambertian_brdf_eval(wo: vec3f, wi: vec3f, normal: vec3f, material: Lambertian) -> vec3f {
     let cos_theta = dot(wi, normal);
 
     if cos_theta <= 0.0 || dot(wo, normal) <= 0.0 {
         return vec3f(0.0);
     }
 
-    return material.datav * (1.0 / PI);
+    return material.albedo * (1.0 / PI);
 }
-fn lambertian_brdf_sample(wo: vec3f, normal: vec3f, material: Material, rng_state: ptr<function, u32>) -> MaterialSample {
+fn lambertian_brdf_sample(wo: vec3f, normal: vec3f, material: Lambertian, rng_state: ptr<function, u32>) -> MaterialSample {
     var result: MaterialSample;
 
     let sample_sun_chance = 0.5;
@@ -78,7 +84,7 @@ fn lambertian_brdf_sample(wo: vec3f, normal: vec3f, material: Material, rng_stat
 
     return result;
 }
-fn lambertian_pdf(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) -> f32 {
+fn lambertian_pdf(wo: vec3f, wi: vec3f, normal: vec3f, material: Lambertian) -> f32 {
     let cos_theta = dot(wi, normal);
 
     if cos_theta <= 0.0 || dot(wo, normal) <= 0.0 {
@@ -97,9 +103,23 @@ fn sun_pdf(wo: vec3f, wi: vec3f, normal: vec3f) -> f32 {
 
 // DISNEY
 
-fn disney_brdf_eval(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) {}
-fn disney_brdf_sample(wo: vec3f, normal: vec3f, material: Material, rng_state: ptr<function, u32>) {}
-fn disney_brdf_pdf(wo: vec3f, wi: vec3f, normal: vec3f, material: Material) {}
+struct Disney {
+    base: vec3f,
+    subsurface: f32,
+    metallic: f32,
+    specular: f32,
+    specular_tint: f32,
+    roughness: f32,
+    anisotropic: f32,
+    sheen: f32,
+    sheen_tint: f32,
+    clearcoat: f32,
+    clearcoat_gloss: f32,
+}
+fn disney(material: Material) /* -> Disney */ {}
+fn disney_brdf_eval(wo: vec3f, wi: vec3f, normal: vec3f, material: Disney) /* -> vec3f */ {}
+fn disney_brdf_sample(wo: vec3f, normal: vec3f, material: Disney, rng_state: ptr<function, u32>) /* -> MaterialSample */ {}
+fn disney_brdf_pdf(wo: vec3f, wi: vec3f, normal: vec3f, material: Disney) /* f32 */ {}
 
 // MISC
 

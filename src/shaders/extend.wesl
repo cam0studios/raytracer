@@ -77,12 +77,12 @@ fn traverse_bvh(ray: Ray) -> Intersection {
 
             let obj = objects[obj_i];
             if obj.kind == 0 {
-                let t = triangle_intersect(ray, obj);
+                let t = triangle_intersect(ray, triangle(obj));
                 if t.dist > 0.0 && t.dist < closest.dist {
                     closest = t;
                 }
             } else if obj.kind == 1 {
-                let t = sphere_intersect(ray, obj);
+                let t = sphere_intersect(ray, sphere(obj));
                 if t.dist > 0.0 && t.dist < closest.dist {
                     closest = t;
                 }
@@ -111,15 +111,20 @@ fn aabb_intersect(ray: Ray, aabb: Aabb, t_max: f32) -> f32 {
 
 // todo: return f32, calculate normal after?
 
-fn triangle_intersect(ray: Ray, triangle: Object) -> Intersection {
+struct Triangle {
+    a: vec3f,
+    b: vec3f,
+    c: vec3f,
+    material: u32,
+}
+fn triangle(object: Object) -> Triangle {
+    return Triangle(object.origin, object.datav, object.datam[0].xyz, object.material);
+}
+fn triangle_intersect(ray: Ray, triangle: Triangle) -> Intersection {
     let epsilon = 1e-6;
 
-    let a = triangle.origin;
-    let b = triangle.datav;
-    let c = triangle.datam[0].xyz;
-
-    let e1 = b - a;
-    let e2 = c - a;
+    let e1 = triangle.b - triangle.a;
+    let e2 = triangle.c - triangle.a;
 
     let ray_cross_e2 = cross(ray.direction, e2);
     let det = dot(e1, ray_cross_e2);
@@ -129,7 +134,7 @@ fn triangle_intersect(ray: Ray, triangle: Object) -> Intersection {
     }
 
     let inv_det = 1.0 / det;
-    let s = ray.origin - a;
+    let s = ray.origin - triangle.a;
     let u = inv_det * dot(s, ray_cross_e2);
     if u < 0.0 || u > 1.0 {
         return intersection_none();
@@ -151,11 +156,19 @@ fn triangle_intersect(ray: Ray, triangle: Object) -> Intersection {
     return Intersection(normal, t, vec3f(0.0, 0.0, 0.0), triangle.material);
 }
 
-fn sphere_intersect(ray: Ray, sphere: Object) -> Intersection {
-    let oc = ray.origin - sphere.origin;
+struct Sphere {
+    center: vec3f,
+    radius: f32,
+    material: u32,
+}
+fn sphere(object: Object) -> Sphere {
+    return Sphere(object.origin, object.datav.x, object.material);
+}
+fn sphere_intersect(ray: Ray, sphere: Sphere) -> Intersection {
+    let oc = ray.origin - sphere.center;
     let a = dot(ray.direction, ray.direction);
     let b = 2 * dot(oc, ray.direction);
-    let c = dot(oc, oc) - sphere.datav.x * sphere.datav.x;
+    let c = dot(oc, oc) - sphere.radius * sphere.radius;
 
     let det = b * b - 4 * a * c;
 
