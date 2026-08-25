@@ -16,9 +16,9 @@ var<storage, read_write> active_rays: array<u32>;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
-    let usize = vars.size;
-    let isize = vec2i(vars.size);
-    let fsize = vec2f(vars.size);
+    let usize = vec2u(vars.size);
+    let isize = vec2i(usize);
+    let fsize = vec2f(usize);
     // let ray = Ray();
     let coords = vec2i(idv.xy);
     let id: u32 = idv.x + idv.y * usize.x;
@@ -35,11 +35,14 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     ray.pixel_y = coords.y;
     // todo: add camera rotation/positioning
 
-    var rng_state = ray_seed(u32(coords.x), u32(coords.y), vars.frame, 1);
+    var rng_state = ray_seed(u32(coords.x), u32(coords.y), vars.frame, vars.sample_idx);
 
     let offset = pcg_2f(&rng_state);
 
-    ray.direction = normalize(vec3f((f32(coords.x) + offset.x - fsize.x / 2) / fsize.y, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y - 0.25, 1.5));
+    var pixel_dir = vec3f((f32(coords.x) + offset.x - fsize.x / 2) / -fsize.y, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y, 1.5);
+    pixel_dir = (vec4f(pixel_dir, 1.0) * vars.camera_mat).xyz;
+
+    ray.direction = normalize(pixel_dir);
     // ray.direction = normalize(vec3f((f32(coords.x) + offset.x - fsize.x / 2) / fsize.y, -1.5, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y));
     ray.inv_dir = 1.0 / ray.direction;
     ray.rng_state = rng_state;

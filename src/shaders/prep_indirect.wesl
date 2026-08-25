@@ -11,7 +11,7 @@ var<storage, read_write> active_ray_indirect: Indirect;
 
 @compute @workgroup_size(1)
 fn main() {
-    let usize = vars.size;
+    let usize = vec2u(vars.size);
 
     active_ray_indirect.count = atomicLoad(&active_ray_counter);
     atomicStore(&active_ray_counter, 0);

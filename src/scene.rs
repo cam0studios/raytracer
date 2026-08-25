@@ -1,6 +1,6 @@
 // scene data, bvh
 
-use glam::Vec3;
+use glam::{Vec3, vec3};
 use std::fmt::{self, Debug};
 
 // Id types
@@ -19,19 +19,19 @@ pub enum Primitive {
     Sphere(Sphere),
 }
 impl Primitive {
-    pub fn material(&self) -> MaterialId {
+    fn material(&self) -> MaterialId {
         match self {
             Self::Triangle(t) => t.material,
             Self::Sphere(s) => s.material,
         }
     }
-    pub fn center(&self) -> Vec3 {
+    fn center(&self) -> Vec3 {
         match self {
             Self::Triangle(t) => t.center(),
             Self::Sphere(s) => s.center,
         }
     }
-    pub fn aabb(&self) -> Aabb {
+    fn aabb(&self) -> Aabb {
         match self {
             Self::Triangle(t) => t.aabb(),
             Self::Sphere(s) => s.aabb(),
@@ -66,19 +66,19 @@ pub struct Triangle {
 impl Triangle {
     pub fn new() -> Self {
         Self {
-            v0: Vec3::new(0.0, 0.0, 0.0),
-            v1: Vec3::new(0.0, 0.0, 0.0),
-            v2: Vec3::new(0.0, 0.0, 0.0),
+            v0: vec3(0.0, 0.0, 0.0),
+            v1: vec3(0.0, 0.0, 0.0),
+            v2: vec3(0.0, 0.0, 0.0),
             material: MaterialId(0),
         }
     }
-    pub fn center(&self) -> Vec3 {
+    fn center(&self) -> Vec3 {
         (self.v0 + self.v1 + self.v2) / 3.0
     }
-    pub fn aabb(&self) -> Aabb {
+    fn aabb(&self) -> Aabb {
         Aabb::from_points(&[self.v0, self.v1, self.v2])
     }
-    pub fn raw(&self) -> [u8; 64] {
+    fn raw(&self) -> [u8; 64] {
         let mut ret = [0u8; 64];
         ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.v0.to_array()));
         ret[12..16].copy_from_slice(bytemuck::cast_slice(&[0u32]));
@@ -109,18 +109,18 @@ pub struct Sphere {
 impl Sphere {
     pub fn new() -> Self {
         Self {
-            center: Vec3::new(0.0, 0.0, 0.0),
+            center: vec3(0.0, 0.0, 0.0),
             radius: 0.0,
             material: MaterialId(0),
         }
     }
-    pub fn aabb(&self) -> Aabb {
+    fn aabb(&self) -> Aabb {
         Aabb {
-            min: self.center - Vec3::new(self.radius, self.radius, self.radius),
-            max: self.center + Vec3::new(self.radius, self.radius, self.radius),
+            min: self.center - vec3(self.radius, self.radius, self.radius),
+            max: self.center + vec3(self.radius, self.radius, self.radius),
         }
     }
-    pub fn raw(&self) -> [u8; 64] {
+    fn raw(&self) -> [u8; 64] {
         let mut ret = [0u8; 64];
         ret[00..12].copy_from_slice(bytemuck::cast_slice(&self.center.to_array()));
         ret[12..16].copy_from_slice(bytemuck::cast_slice(&[1u32]));
@@ -148,7 +148,7 @@ impl Debug for Sphere {
 // AABB
 
 const MARGIN: f32 = 0.00001;
-const MARGIN_V: Vec3 = Vec3::new(MARGIN, MARGIN, MARGIN);
+const MARGIN_V: Vec3 = vec3(MARGIN, MARGIN, MARGIN);
 
 #[derive(Clone, Debug, Copy)]
 pub struct Aabb {
@@ -158,8 +158,8 @@ pub struct Aabb {
 impl Aabb {
     pub fn new() -> Self {
         Self {
-            min: Vec3::new(0.0, 0.0, 0.0),
-            max: Vec3::new(0.0, 0.0, 0.0),
+            min: vec3(0.0, 0.0, 0.0),
+            max: vec3(0.0, 0.0, 0.0),
         }
     }
     pub fn from_points(points: &[Vec3]) -> Self {
@@ -382,7 +382,7 @@ pub struct Lambertian {
 impl Lambertian {
     pub fn new() -> Self {
         Self {
-            color: Vec3::new(0.0, 0.0, 0.0),
+            color: vec3(0.0, 0.0, 0.0),
         }
     }
     pub fn raw(&self) -> [u8; 64] {

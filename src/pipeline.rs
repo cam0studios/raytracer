@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use glam::Vec3;
+use glam::vec3;
 use wesl::{StandardResolver, Wesl};
 
 use crate::{
@@ -17,11 +17,11 @@ const CONSTS: Consts = Consts {
 };
 
 pub struct Pipeline {
-    pub buffers: BufferManager,
-    pub size: Size,
-    pub pipelines: Pipelines,
-    pub bind_group_layouts: BindGroupLayouts,
-    pub bind_groups: BindGroups,
+    buffers: BufferManager,
+    size: Size,
+    pipelines: Pipelines,
+    bind_group_layouts: BindGroupLayouts,
+    bind_groups: BindGroups,
     timer: Option<Instant>,
 }
 impl Pipeline {
@@ -30,61 +30,64 @@ impl Pipeline {
         let scene = Scene::from_data(
             vec![
                 Sphere {
-                    center: Vec3::new(0.0, 1.1, 10.0),
+                    center: vec3(0.0, 1.1, 10.0),
                     radius: 1.2,
                     material: MaterialId(0),
                 }
                 .primitive(),
                 Sphere {
-                    center: Vec3::new(0.0, -0.2, 10.0),
+                    center: vec3(0.0, -0.2, 10.0),
                     radius: 0.9,
                     material: MaterialId(0),
                 }
                 .primitive(),
                 Sphere {
-                    center: Vec3::new(0.0, -1.3, 10.0),
+                    center: vec3(0.0, -1.3, 10.0),
                     radius: 0.7,
                     material: MaterialId(0),
                 }
                 .primitive(),
                 Sphere {
-                    center: Vec3::new(0.0, 101.5, 10.0),
+                    center: vec3(0.0, 101.5, 10.0),
                     radius: 100.0,
                     material: MaterialId(1),
                 }
                 .primitive(),
                 Triangle {
-                    v0: Vec3::new(-0.8, 1.0, 9.0),
-                    v1: Vec3::new(-0.8, -2.0, 9.0),
-                    v2: Vec3::new(-0.5, 1.0, 11.0),
+                    v0: vec3(-0.8, 1.0, 9.0),
+                    v1: vec3(-0.8, -2.0, 9.0),
+                    v2: vec3(-0.5, 1.0, 11.0),
                     material: MaterialId(2),
                 }
                 .primitive(),
                 Triangle {
-                    v0: Vec3::new(-0.5, -2.0, 11.0),
-                    v1: Vec3::new(-0.8, -2.0, 9.0),
-                    v2: Vec3::new(-0.5, 1.0, 11.0),
+                    v0: vec3(-0.5, -2.0, 11.0),
+                    v1: vec3(-0.8, -2.0, 9.0),
+                    v2: vec3(-0.5, 1.0, 11.0),
                     material: MaterialId(2),
                 }
                 .primitive(),
             ],
             vec![
                 Lambertian {
-                    color: Vec3::new(0.9, 0.9, 0.9),
+                    color: vec3(0.9, 0.9, 0.9),
                 }
                 .material(),
                 Lambertian {
-                    color: Vec3::new(0.15, 0.6, 0.05),
+                    color: vec3(0.15, 0.6, 0.05),
                 }
                 .material(),
                 Lambertian {
-                    color: Vec3::new(1.0, 0.1, 0.1),
+                    color: vec3(1.0, 0.1, 0.1),
                 }
                 .material(),
             ],
         );
 
-        let buffers = BufferManager::new(device, config, &scene);
+        let mut buffers = BufferManager::new(device, config, &scene);
+
+        buffers.vars.camera_dir = vec3(0.0, -0.1, 1.0).normalize();
+        buffers.vars.update_matrix();
 
         let compiler = Wesl::new("src/shaders");
 
@@ -257,7 +260,7 @@ impl Pipeline {
         // START
 
         self.buffers.vars.bounce = 0;
-        self.buffers.write_vars(&context.device, &context.queue);
+        self.buffers.write_vars(&context.queue);
 
         for frame in 0..CONSTS.frames {
             // GENERATE PASS
@@ -287,7 +290,7 @@ impl Pipeline {
 
             for bounce in 0..CONSTS.bounces {
                 self.buffers.vars.bounce = bounce;
-                self.buffers.write_vars(&context.device, &context.queue);
+                self.buffers.write_vars(&context.queue);
                 let mut bounce_encoder =
                     context
                         .device
@@ -336,7 +339,7 @@ impl Pipeline {
             }
 
             self.buffers.vars.frame += 1;
-            self.buffers.write_vars(&context.device, &context.queue);
+            self.buffers.write_vars(&context.queue);
         }
 
         // BLIT PASS
@@ -397,7 +400,7 @@ impl Pipeline {
         self.buffers.resize(&device, self.size);
         self.buffers.vars.size = size;
         self.buffers.vars.frame = 0;
-        self.buffers.write_vars(device, queue);
+        self.buffers.write_vars(queue);
         self.bind_groups = Self::get_bind_groups(&self.bind_group_layouts, &device, &self.buffers);
         self.timer = Some(Instant::now());
     }
@@ -551,7 +554,7 @@ impl Pipeline {
     }
 }
 
-pub struct Consts {
+struct Consts {
     bounces: u32,
     frames: u32,
 }
@@ -570,7 +573,7 @@ impl Clone for Size {
 }
 impl Copy for Size {}
 
-pub struct Pipelines {
+struct Pipelines {
     generate: wgpu::ComputePipeline,
     prep_indirect: wgpu::ComputePipeline,
     extend: wgpu::ComputePipeline,
@@ -578,7 +581,7 @@ pub struct Pipelines {
     // compact: wgpu::ComputePipeline
     blit: wgpu::RenderPipeline,
 }
-pub struct BindGroups {
+struct BindGroups {
     generate: wgpu::BindGroup,
     prep_indirect: wgpu::BindGroup,
     extend: wgpu::BindGroup,
@@ -586,7 +589,7 @@ pub struct BindGroups {
     // compact: wgpu::BindGroup,
     blit: wgpu::BindGroup,
 }
-pub struct BindGroupLayouts {
+struct BindGroupLayouts {
     generate: wgpu::BindGroupLayout,
     prep_indirect: wgpu::BindGroupLayout,
     extend: wgpu::BindGroupLayout,

@@ -10,9 +10,11 @@ indirect:  dimx i32, dimy i32, dimz i32, count i32
 */
 
 struct Vars {
+    camera_mat: mat4x4f,
     size: vec2u,
     frame: u32,
     bounce: u32,
+    sample_idx: u32,
 }
 
 // todo: object count as negative right index
