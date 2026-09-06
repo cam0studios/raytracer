@@ -234,6 +234,7 @@ pub struct Vars {
     pub bounce: u32,
     pub size: Size,
     pub sample_idx: u32,
+    pub exposure: f32,
     matrix: Mat4,
 }
 impl Vars {
@@ -245,6 +246,7 @@ impl Vars {
             bounce: 0,
             sample_idx: 0,
             size,
+            exposure: 0.0,
             matrix: Mat4::default(),
         }
     }
@@ -255,31 +257,18 @@ impl Vars {
         ret[72..76].copy_from_slice(bytemuck::cast_slice(&[self.frame]));
         ret[76..80].copy_from_slice(bytemuck::cast_slice(&[self.bounce]));
         ret[80..84].copy_from_slice(bytemuck::cast_slice(&[self.sample_idx]));
-        ret[84..128].copy_from_slice(bytemuck::cast_slice(&[0f32; 11]));
+        ret[84..88].copy_from_slice(bytemuck::cast_slice(&[self.exposure]));
+        ret[88..128].copy_from_slice(bytemuck::cast_slice(&[0f32; 10]));
         ret
     }
     pub fn update_matrix(&mut self) {
-        let camera_right = self.camera_dir.cross(vec3(0.0, 1.0, 0.0));
-        let camera_up = camera_right.cross(self.camera_dir);
+        let forward = self.camera_dir.normalize();
+        let right = forward.cross(vec3(0.0, 1.0, 0.0)).normalize();
+        let up = right.cross(forward).normalize();
         self.matrix = Mat4::from_cols_array_2d(&[
-            [
-                camera_right.x,
-                camera_up.x,
-                self.camera_dir.x,
-                self.camera_pos.x,
-            ],
-            [
-                camera_right.y,
-                camera_up.y,
-                self.camera_dir.y,
-                self.camera_pos.y,
-            ],
-            [
-                camera_right.z,
-                camera_up.z,
-                self.camera_dir.z,
-                self.camera_pos.z,
-            ],
+            [right.x, up.x, forward.x, self.camera_pos.x],
+            [right.y, up.y, forward.y, self.camera_pos.y],
+            [right.z, up.z, forward.z, self.camera_pos.z],
             [0.0, 0.0, 0.0, 1.0],
         ]);
     }

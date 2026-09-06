@@ -15,6 +15,7 @@ struct Vars {
     frame: u32,
     bounce: u32,
     sample_idx: u32,
+    exposure: f32,
 }
 
 // todo: object count as negative right index

@@ -33,18 +33,17 @@ fn main(@builtin(global_invocation_id)idv: vec3<u32>) {
     ray.throughput = vec3f(1.0, 1.0, 1.0);
     ray.pixel_x = coords.x;
     ray.pixel_y = coords.y;
-    // todo: add camera rotation/positioning
 
     var rng_state = ray_seed(u32(coords.x), u32(coords.y), vars.frame, vars.sample_idx);
 
-    let offset = pcg_2f(&rng_state);
+    ray.origin = (vec4f(0.0, 0.0, 0.0, 1.0) * vars.camera_mat).xyz;
 
-    var pixel_dir = vec3f((f32(coords.x) + offset.x - fsize.x / 2) / -fsize.y, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y, 1.5);
-    pixel_dir = (vec4f(pixel_dir, 1.0) * vars.camera_mat).xyz;
+    let aa_offset = pcg_2f(&rng_state);
+    var pixel_dir = vec3f((f32(coords.x) + aa_offset.x - fsize.x / 2) / -fsize.y, (f32(coords.y) + aa_offset.y - fsize.y / 2) / fsize.y, 1.5);
+    pixel_dir = (vec4f(pixel_dir, 0.0) * vars.camera_mat).xyz;
 
     ray.direction = normalize(pixel_dir);
-    // ray.direction = normalize(vec3f((f32(coords.x) + offset.x - fsize.x / 2) / fsize.y, -1.5, (f32(coords.y) + offset.y - fsize.y / 2) / fsize.y));
-    ray.inv_dir = 1.0 / ray.direction;
+    ray.inv_dir = 1.0 / normalize(ray.direction);
     ray.rng_state = rng_state;
 
     rays[id] = ray;

@@ -1,11 +1,16 @@
 // window creation/management, wgpu setup
 
-use std::sync::Arc;
+use std::{
+    collections::HashSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowId},
 };
 
@@ -23,6 +28,9 @@ pub struct State {
     pub context: Context,
     pub window: Arc<Window>,
     pipeline: Pipeline,
+    keys: HashSet<KeyCode>,
+    prev_time: Instant,
+    time_since_update: Duration,
 }
 
 impl State {
@@ -94,6 +102,9 @@ impl State {
                 is_surface_configured: false,
             },
             pipeline,
+            keys: HashSet::new(),
+            prev_time: Instant::now(),
+            time_since_update: Duration::new(0, 0),
         })
     }
 
@@ -177,7 +188,44 @@ impl ApplicationHandler for WindowManager {
                     event_loop.exit();
                 }
             },
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => match key_state.is_pressed() {
+                true => {
+                    state.keys.insert(code);
+                }
+                false => {
+                    state.keys.remove(&code);
+                }
+            },
             _ => (),
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let state = match &mut self.state {
+            Some(state) => state,
+            None => return,
+        };
+
+        let now = Instant::now();
+        let dt = now.duration_since(state.prev_time);
+        state.prev_time = now;
+        state.time_since_update += dt;
+
+        let timestep = Duration::from_millis(1000 / 60);
+        while state.time_since_update >= timestep {
+            state.pipeline.control(&state.context, &state.keys, dt);
+            state.time_since_update -= timestep;
+        }
+
+        event_loop.set_control_flow(ControlFlow::Poll);
+        state.window.request_redraw();
     }
 }

@@ -209,10 +209,10 @@ fn sky_shade(ray: ptr<function, Ray>, intersection: Intersection, rng_state: ptr
     let sunset_horizon_near /**/ = vec3f(2.5, 0.8, 0.1);
     let sunset_zenith /*      */ = vec3f(0.1, 0.15, 0.25);
     let sunset_horizon_pow /*       */ = 3.0;
-    let sunset_zenith_pow /*        */ = 0.7;
-    let sunset_glow_g /*            */ = 0.70;
+    let sunset_zenith_pow /*        */ = 0.3;
+    let sunset_glow_g /*            */ = 0.77;
     let sunset_glow_scale /*        */ = 0.45;
-    let sunset_glow_modifier /*     */ = 2.8;
+    let sunset_glow_modifier /*     */ = 2.1;
 
     let night_horizon /* */ = vec3f(0.001, 0.0015, 0.005);
     let night_zenith /*  */ = vec3f(0.0002, 0.0004, 0.0015);

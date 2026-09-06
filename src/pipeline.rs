@@ -1,9 +1,13 @@
 // wgpu compiling and encoding
 
-use std::time::Instant;
+use std::{
+    collections::HashSet,
+    time::{Duration, Instant},
+};
 
-use glam::vec3;
+use glam::{vec2, vec3};
 use wesl::{StandardResolver, Wesl};
+use winit::keyboard::KeyCode;
 
 use crate::{
     buffers::BufferManager,
@@ -379,8 +383,9 @@ impl Pipeline {
 
         context.queue.present(output);
 
+        // todo: display on screen
         log::info!(
-            "time: {}:{:02}:{:02}.{:03}, frame {}, {:.2} fps, {:.2} rps",
+            "time: {}:{:02}:{:02}.{:03}, frame {}, {:.2} fps, {:.2} rps, exp {:.2}",
             timer.elapsed().as_secs() / 3600,
             timer.elapsed().as_secs() / 60 % 60,
             timer.elapsed().as_secs() % 60,
@@ -389,7 +394,8 @@ impl Pipeline {
             (self.buffers.vars.frame as f32)
                 / timer.elapsed().as_secs_f32()
                 / (CONSTS.frames as f32),
-            (self.buffers.vars.frame as f32) / timer.elapsed().as_secs_f32()
+            (self.buffers.vars.frame as f32) / timer.elapsed().as_secs_f32(),
+            self.buffers.vars.exposure
         );
 
         Ok(())
@@ -551,6 +557,72 @@ impl Pipeline {
             // compact,
             blit,
         }
+    }
+
+    pub fn control(&mut self, context: &Context, keys: &HashSet<KeyCode>, dt: Duration) {
+        // key presses
+        let fast = keys.contains(&KeyCode::ShiftLeft);
+
+        let rot_left = keys.contains(&KeyCode::ArrowLeft);
+        let rot_right = keys.contains(&KeyCode::ArrowRight);
+        let rot_up = keys.contains(&KeyCode::ArrowUp);
+        let rot_down = keys.contains(&KeyCode::ArrowDown);
+        let rotation = vec2(
+            Self::key_f(rot_left) - Self::key_f(rot_right),
+            Self::key_f(rot_up) - Self::key_f(rot_down),
+        ) * dt.as_secs_f32()
+            * Self::lerp(0.1, 0.5, Self::key_f(fast));
+
+        let move_left = keys.contains(&KeyCode::KeyA);
+        let move_right = keys.contains(&KeyCode::KeyD);
+        let move_up = keys.contains(&KeyCode::Space);
+        let move_down = keys.contains(&KeyCode::ControlLeft);
+        let move_fwd = keys.contains(&KeyCode::KeyW);
+        let move_back = keys.contains(&KeyCode::KeyS);
+        let movement = vec3(
+            Self::key_f(move_right) - Self::key_f(move_left),
+            Self::key_f(move_up) - Self::key_f(move_down),
+            Self::key_f(move_fwd) - Self::key_f(move_back),
+        ) * dt.as_secs_f32()
+            * Self::lerp(0.7, 3.0, Self::key_f(fast));
+
+        let exposure_up = keys.contains(&KeyCode::KeyC);
+        let exposure_down = keys.contains(&KeyCode::KeyX);
+        let exposure = (Self::key_f(exposure_up) - Self::key_f(exposure_down))
+            * dt.as_secs_f32()
+            * Self::lerp(0.1, 0.5, Self::key_f(fast));
+
+        // camera movement
+        // todo: quaternion
+        if rotation.length_squared() > 1e-5 || movement.length_squared() > 1e-5 {
+            let mut dir = self.buffers.vars.camera_dir;
+
+            let up = vec3(0.0, -1.0, 0.0);
+            let fwd = vec3(dir.x, 0.0, dir.z).normalize();
+            let right = fwd.cross(up);
+
+            dir = dir
+                .rotate_axis(right, rotation.y)
+                .rotate_axis(up, rotation.x);
+            self.buffers.vars.camera_dir = dir;
+
+            self.buffers.vars.camera_pos += right * movement.x + up * movement.y + fwd * movement.z;
+        }
+
+        // misc
+        self.buffers.vars.exposure += exposure;
+
+        if rotation.length_squared() > 1e-5 || movement.length_squared() > 1e-5 {
+            self.buffers.vars.update_matrix();
+            self.buffers.clear(&context.queue);
+        }
+        self.buffers.write_vars(&context.queue);
+    }
+    fn key_f(key: bool) -> f32 {
+        if key { 1.0 } else { 0.0 }
+    }
+    fn lerp(a: f32, b: f32, t: f32) -> f32 {
+        a + (b - a) * t
     }
 }
 
